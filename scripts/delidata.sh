@@ -1,3 +1,4 @@
+#!/bin/bash
 URL="https://datasets-server.huggingface.co/rows?dataset=gkaradzhov%2FDeliData&config=default&split=train&offset=0"
 DOWNLOAD_DIR="downloads/delidata"
 

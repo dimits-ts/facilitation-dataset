@@ -9,3 +9,4 @@
 - [DeliData](https://www.delibot.xyz/delidata/)
 - [WikiTactics](https://arxiv.org/abs/2212.08353)
 - [UMOD](https://aclanthology.org/2024.eacl-long.60/)
+- [Fora](https://aclanthology.org/2024.acl-long.754/)
