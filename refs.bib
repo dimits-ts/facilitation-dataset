@@ -1,0 +1,135 @@
+@inproceedings{wikiconv,
+    title = "{W}iki{C}onv: A Corpus of the Complete Conversational History of a Large Online Collaborative Community",
+    author = "Hua, Yiqing  and
+      Danescu-Niculescu-Mizil, Cristian  and
+      Taraborelli, Dario  and
+      Thain, Nithum  and
+      Sorensen, Jeffery  and
+      Dixon, Lucas",
+    editor = "Riloff, Ellen  and
+      Chiang, David  and
+      Hockenmaier, Julia  and
+      Tsujii, Jun{'}ichi",
+    booktitle = "Proceedings of the 2018 Conference on Empirical Methods in Natural Language Processing",
+    month = oct # "-" # nov,
+    year = "2018",
+    address = "Brussels, Belgium",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/D18-1305/",
+    doi = "10.18653/v1/D18-1305",
+    pages = "2818--2823",
+    abstract = "We present a corpus that encompasses the complete history of conversations between contributors to Wikipedia, one of the largest online collaborative communities. By recording the intermediate states of conversations - including not only comments and replies, but also their modifications, deletions and restorations - this data offers an unprecedented view of online conversation. Our framework is designed to be language agnostic, and we show that it extracts high quality data in both Chinese and English. This level of detail supports new research questions pertaining to the process (and challenges) of large-scale online collaboration. We illustrate the corpus' potential with two case studies on English Wikipedia that highlight new perspectives on earlier work. First, we explore how a person{'}s conversational behavior depends on how they relate to the discussion{'}s venue. Second, we show that community moderation of toxic behavior happens at a higher rate than previously estimated."
+}
+
+@inproceedings{umod,
+    title = "Moderation in the Wild: Investigating User-Driven Moderation in Online Discussions",
+    author = "Falk, Neele  and
+      Vecchi, Eva  and
+      Jundi, Iman  and
+      Lapesa, Gabriella",
+    editor = "Graham, Yvette  and
+      Purver, Matthew",
+    booktitle = "Proceedings of the 18th Conference of the European Chapter of the Association for Computational Linguistics (Volume 1: Long Papers)",
+    month = mar,
+    year = "2024",
+    address = "St. Julian{'}s, Malta",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2024.eacl-long.60/",
+    pages = "992--1013",
+    abstract = "Effective content moderation is imperative for fostering healthy and productive discussions in online domains. Despite the substantial efforts of moderators, the overwhelming nature of discussion flow can limit their effectiveness. However, it is not only trained moderators who intervene in online discussions to improve their quality. ``Ordinary'' users also act as moderators, actively intervening to correct information of other users' posts, enhance arguments, and steer discussions back on course.This paper introduces the phenomenon of user moderation, documenting and releasing UMOD, the first dataset of comments in whichusers act as moderators. UMOD contains 1000 comment-reply pairs from the subreddit r/changemyview with crowdsourced annotations from a large annotator pool and with a fine-grained annotation schema targeting the functions of moderation, stylistic properties(aggressiveness, subjectivity, sentiment), constructiveness, as well as the individual perspectives of the annotators on the task. The releaseof UMOD is complemented by two analyses which focus on the constitutive features of constructiveness in user moderation and on thesources of annotator disagreements, given the high subjectivity of the task."
+}
+
+
+@inproceedings{wikidisputes,
+    title = "{I} Beg to Differ: A study of constructive disagreement in online conversations",
+    author = "De Kock, Christine  and
+      Vlachos, Andreas",
+    editor = "Merlo, Paola  and
+      Tiedemann, Jorg  and
+      Tsarfaty, Reut",
+    booktitle = "Proceedings of the 16th Conference of the European Chapter of the Association for Computational Linguistics: Main Volume",
+    month = apr,
+    year = "2021",
+    address = "Online",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2021.eacl-main.173/",
+    doi = "10.18653/v1/2021.eacl-main.173",
+    pages = "2017--2027",
+    abstract = "Disagreements are pervasive in human communication. In this paper we investigate what makes disagreement constructive. To this end, we construct WikiDisputes, a corpus of 7425 Wikipedia Talk page conversations that contain content disputes, and define the task of predicting whether disagreements will be escalated to mediation by a moderator. We evaluate feature-based models with linguistic markers from previous work, and demonstrate that their performance is improved by using features that capture changes in linguistic markers throughout the conversations, as opposed to averaged values. We develop a variety of neural models and show that taking into account the structure of the conversation improves predictive accuracy, exceeding that of feature-based models. We assess our best neural model in terms of both predictive accuracy and uncertainty by evaluating its behaviour when it is only exposed to the beginning of the conversation, finding that model accuracy improves and uncertainty reduces as models are exposed to more information."
+}
+
+
+@inproceedings{wikitactics,
+    title = "How to disagree well: Investigating the dispute tactics used on {W}ikipedia",
+    author = "De Kock, Christine  and
+      Stafford, Tom  and
+      Vlachos, Andreas",
+    editor = "Goldberg, Yoav  and
+      Kozareva, Zornitsa  and
+      Zhang, Yue",
+    booktitle = "Proceedings of the 2022 Conference on Empirical Methods in Natural Language Processing",
+    month = dec,
+    year = "2022",
+    address = "Abu Dhabi, United Arab Emirates",
+    publisher = "Association for Computational Linguistics",
+    url = "https://aclanthology.org/2022.emnlp-main.252/",
+    doi = "10.18653/v1/2022.emnlp-main.252",
+    pages = "3824--3837",
+    abstract = "Disagreements are frequently studied from the perspective of either detecting toxicity or analysing argument structure. We propose a framework of dispute tactics which unifies these two perspectives, as well as other dialogue acts which play a role in resolving disputes, such as asking questions and providing clarification. This framework includes a preferential ordering among rebuttal-type tactics, ranging from ad hominem attacks to refuting the central argument. Using this framework, we annotate 213 disagreements (3,865 utterances) from Wikipedia Talk pages. This allows us to investigate research questions around the tactics used in disagreements; for instance, we provide empirical validation of the approach to disagreement recommended by Wikipedia. We develop models for multilabel prediction of dispute tactics in an utterance, achieving the best performance with a transformer-based label powerset model. Adding an auxiliary task to incorporate the ordering of rebuttal tactics further yields a statistically significant increase. Finally, we show that these annotations can be used to provide useful additional signals to improve performance on the task of predicting escalation."
+}
+
+@article{delidata,
+	author = {Karadzhov, Georgi and Stafford, Tom and Vlachos, Andreas},
+	title = {DeliData: A Dataset for Deliberation in Multi-party Problem Solving},
+	year = {2023},
+	issue_date = {October 2023},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	volume = {7},
+	number = {CSCW2},
+	url = {https://doi.org/10.1145/3610056},
+	doi = {10.1145/3610056},
+	abstract = {Group deliberation enables people to collaborate and solve problems, however, it is understudied due to a lack of resources. To this end, we introduce the first publicly available dataset containing collaborative conversations on solving a well-established cognitive task, consisting of 500 group dialogues and 14k utterances. In 64\% of these conversations, the group members are able to find a better solution than they had identified individually, and in 43.8\% of the groups who had a correct answer as their final solution, none of the participants had solved the task correctly by themselves. Furthermore, we propose a novel annotation schema that captures deliberation cues and release all 14k utterances annotated with it. Finally, we use the proposed dataset to develop and evaluate two methods for generating deliberation utterances. The data collection platform, dataset and annotated corpus are publicly available at https://delibot.xyz.},
+	journal = {Proc. ACM Hum.-Comput. Interact.},
+	month = oct,
+	articleno = {265},
+	numpages = {25},
+	keywords = {collaboration, deliberation, dialogue systems}
+}
+
+@misc{vmd,
+      title={Scalable Evaluation of Online Facilitation Strategies via Synthetic Simulation of Discussions}, 
+      author={Dimitris Tsirmpas and Ion Androutsopoulos and John Pavlopoulos},
+      year={2025},
+      eprint={2503.16505},
+      archivePrefix={arXiv},
+      primaryClass={cs.HC},
+      url={https://arxiv.org/abs/2503.16505}, 
+}
+
+@misc{cmv_awry2,
+      title={Trouble on the Horizon: Forecasting the Derailment of Online Conversations as they Develop}, 
+      author={Jonathan P. Chang and Cristian Danescu-Niculescu-Mizil},
+      year={2019},
+      eprint={1909.01362},
+      archivePrefix={arXiv},
+      primaryClass={cs.CL},
+      url={https://arxiv.org/abs/1909.01362}, 
+}
+
+@inproceedings{ceri,
+	author = {Park, Joonsuk and Klingel, Sally and Cardie, Claire and Newhart, Mary and Farina, Cynthia and Vallb\'{e}, Joan-Josep},
+	title = {Facilitative moderation for online participation in eRulemaking},
+	year = {2012},
+	isbn = {9781450314039},
+	publisher = {Association for Computing Machinery},
+	address = {New York, NY, USA},
+	url = {https://doi.org/10.1145/2307729.2307757},
+	doi = {10.1145/2307729.2307757},
+	abstract = {This paper describes the use of facilitative moderation strategies in an online rulemaking public participation system. Rulemaking is one of the U. S. government's most important policymaking methods. Although broad transparency and participation rights are part of its legal structure, significant barriers prevent effective engagement by many groups of interested citizens. Regulation Room, an experimental open-government partnership between academic researchers and government agencies, is a socio-technical participation system that uses multiple methods to lower potential barriers to broader participation. To encourage effective individual comments and productive group discussion in Regulation Room, we adapt strategies for facilitative human moderation originating from social science research in deliberative democracy and alternative dispute resolution [24, 1, 18, 14] for use in the demanding online participation setting of eRulemaking. We develop a moderation protocol, deploy it in "live" Department of Transportation (DOT) rulemakings, and provide an initial analysis of its use through a manual coding of all moderator interventions with respect to the protocol. We then investigate the feasibility of automating the moderation protocol: we employ annotated data from the coding project to train machine learning-based classifiers to identify places in the online discussion where human moderator intervention is required. Though the trained classifiers only marginally outperform the baseline, the improvement is statistically significant in spite of limited data and a very basic feature set, which is a promising result.},
+	booktitle = {Proceedings of the 13th Annual International Conference on Digital Government Research},
+	pages = {173–182},
+	numpages = {10},
+	location = {College Park, Maryland, USA},
+	series = {dg.o '12}
+}
