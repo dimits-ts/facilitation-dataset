@@ -4,4 +4,4 @@ DOWNLOAD_DIR="downloads/delidata"
 
 mkdir -p $DOWNLOAD_DIR
 cd $DOWNLOAD_DIR && { curl -o "delidata.json" -X GET $URL ; cd -; }
-mv "$DOWNLOAD_DIR/rows" "$DOWNLOAD_DIR/delidata.json"
+#mv "$DOWNLOAD_DIR/rows" "$DOWNLOAD_DIR/delidata.json"
