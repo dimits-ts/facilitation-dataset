@@ -2,6 +2,8 @@ from pathlib import Path
 
 import pandas as pd
 
+import preprocessing
+
 
 INPUT_PATH = Path(
     "../downloads/cmv_awry2/conversations-gone-awry-cmv-corpus/"
@@ -27,19 +29,7 @@ def main():
             "meta": "notes",
         }
     )
-    df = df.loc[
-        :,
-        [
-            "conv_id",
-            "message_id",
-            "reply_to",
-            "user",
-            "is_moderator",
-            "text",
-            "dataset",
-            "notes",
-        ],
-    ]
+    df = preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH)
 
 

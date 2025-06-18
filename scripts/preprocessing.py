@@ -15,12 +15,15 @@ def filter_discussions_by_comment_count(
 
     Parameters:
     - df (pd.DataFrame): The dataframe containing the discussion data.
-    - min_comments (int): Minimum number of comments required to keep a discussion.
-    - max_comments (int or None): Maximum number of comments allowed to keep a discussion.
+    - min_comments (int): Minimum number of comments required to keep a 
+    discussion.
+    - max_comments (int or None): Maximum number of comments allowed to keep a 
+    discussion.
     - discussion_col (str): Name of the column identifying discussions.
 
     Returns:
-    - pd.DataFrame: Filtered dataframe containing only discussions within the specified range.
+    - pd.DataFrame: Filtered dataframe containing only discussions within the 
+    specified range.
     """
     discussion_counts = df[discussion_col].value_counts()
 
@@ -50,3 +53,19 @@ def hash_to_md5(input_string: str) -> str:
     """
     md5_hash = hashlib.md5(input_string.encode("utf-8"))
     return md5_hash.hexdigest()
+
+
+def std_format_df(df: pd.DataFrame) -> pd.DataFrame:
+    return df.loc[
+        :,
+        [
+            "conv_id",
+            "message_id",
+            "reply_to",
+            "user",
+            "is_moderator",
+            "text",
+            "dataset",
+            "notes",
+        ],
+    ]
