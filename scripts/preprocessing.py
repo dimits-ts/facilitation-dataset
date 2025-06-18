@@ -1,3 +1,5 @@
+import hashlib
+
 import pandas as pd
 
 
@@ -34,3 +36,17 @@ def filter_discussions_by_comment_count(
 
     filtered_df = df[df[discussion_col].isin(valid_discussions)].copy()
     return filtered_df
+
+
+def hash_to_md5(input_string: str) -> str:
+    """
+    Hashes a string using MD5 and returns the hexadecimal digest.
+
+    Args:
+        input_string (str): The input string to hash.
+
+    Returns:
+        str: The MD5 hash of the input string in hexadecimal format.
+    """
+    md5_hash = hashlib.md5(input_string.encode("utf-8"))
+    return md5_hash.hexdigest()
