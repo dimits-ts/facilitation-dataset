@@ -1,0 +1,10 @@
+name: pefk_dataset
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python
+  - pandas
+  - numpy
+  - tqdm
+  - openpyxl
