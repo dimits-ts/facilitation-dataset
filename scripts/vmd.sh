@@ -1,5 +1,5 @@
 #!/bin/bash
-DOWNLOAD_DIR="downloads/vmd"
+DOWNLOAD_DIR="../downloads/vmd"
 URL="https://github.com/dimits-ts/synthetic_moderation_experiments/raw/refs/heads/master/data/datasets/main/main.zip"
 
 mkdir -p $DOWNLOAD_DIR

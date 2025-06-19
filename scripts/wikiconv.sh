@@ -1,6 +1,6 @@
 #!/bin/bash
 
-DOWNLOAD_DIR="downloads/wikiconv"
+DOWNLOAD_DIR="../downloads/wikiconv"
 ZIP_ROOT="$DOWNLOAD_DIR/datasets/wikiconv-corpus/corpus-zipped"
 URL="https://zissou.infosci.cornell.edu/convokit/datasets/wikiconv-corpus/"
 
