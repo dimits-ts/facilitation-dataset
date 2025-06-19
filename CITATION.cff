@@ -1,0 +1,10 @@
+cff-version: 1.2.0
+message: "If you use this dataset, please cite it as below."
+authors:
+- family-names: "Tsirmpas"
+  given-names: "Dimitris"
+  orcid: "https://orcid.org/0000-0002-5675-3939"
+title: "PEFK: Patterns of Engagement in Facilitated Konversations"
+version: 0.0.1
+date-released: 2025-06-19
+url: "https://github.com/dimits-ts/facilitation-dataset"
