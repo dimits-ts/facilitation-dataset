@@ -92,7 +92,7 @@ def process_dataset():
 
 if __name__ == "__main__":
     print("Converting dataset...")
-    # combine_dataset()
+    combine_dataset()
     print("Processing dataset...")
     process_dataset()
     print("Done.")
