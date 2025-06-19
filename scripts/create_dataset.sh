@@ -10,6 +10,8 @@ fi
 # enable logging
 exec 1 | tee ${LOG_FILE}
 exec 2 | tee ${LOG_FILE}
+mkdir -p "../datasets"
+mkdir -p "../downloads"
 
 # download datasets to ../downloads, then export them to ../datasets
 declare -a datasetnames=("ceri" "cmv_awry2" "umod" "vmd" "wikiconv" "wikidisputes" "wikitactics")
