@@ -32,6 +32,7 @@ git clone https://github.com/dimits-ts/facilitation-dataset.git
 
 cd facilitation-dataset
 conda env create -f environment.yml
+conda activate pefk-dataset
 
 cd scripts
 bash create_dataset.sh
