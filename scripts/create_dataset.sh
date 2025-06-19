@@ -7,9 +7,10 @@ if [ -f "$PEFK_PATH" ]; then
     exit 0
 fi
 
-# enable logging
-exec 1 | tee ${LOG_FILE}
-exec 2 | tee ${LOG_FILE}
+touch "$LOG_FILE"
+# setup logging with timestamps
+exec > >(awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }' | tee "$LOG_FILE") 2>&1
+
 mkdir -p "../datasets"
 mkdir -p "../downloads"
 
@@ -17,9 +18,9 @@ mkdir -p "../downloads"
 declare -a datasetnames=("ceri" "cmv_awry2" "umod" "vmd" "wikiconv" "wikidisputes" "wikitactics")
 
 for datasetname in "${datasetnames[@]}"; do
-    echo "Downloading ${datasetname}.sh"
+    echo "Downloading ${datasetname}..."
     bash "$datasetname.sh"
-    echo "Processing ${datasetname}.py"
+    echo "Processing ${datasetname}..."
     python "$datasetname.py"
 done
 
