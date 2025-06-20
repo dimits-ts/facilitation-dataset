@@ -1,22 +1,16 @@
 #!/bin/bash
 PEFK_PATH="../pefk.csv"
-LOG_FILE="../pefk.log"
 
 if [ -f "$PEFK_PATH" ]; then 
     echo "Combined dataset already exists. Exiting..."
     exit 0
 fi
 
-touch "$LOG_FILE"
-# setup no-buffer logging with timestamps
-exec > >(stdbuf -oL awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }' | stdbuf -oL tee "$LOG_FILE") 2>&1
-
-
 mkdir -p "../datasets"
 mkdir -p "../downloads"
 
 # download datasets to ../downloads, then export them to ../datasets
-declare -a datasetnames=("ceri" "cmv_awry2" "umod" "vmd" "wikidisputes" "wikitactics")
+declare -a datasetnames=("ceri" "cmv_awry2" "umod" "vmd" "wikiconv" "wikidisputes" "wikitactics")
 
 for datasetname in "${datasetnames[@]}"; do
     echo "Downloading ${datasetname}..."
@@ -33,8 +27,8 @@ echo  "Finished dataset construction."
 
 # clean-up to release disk space
 echo "Cleaning up downloads directory..."
-rm -r "../downloads"
+#rm -r "../downloads"
 echo "Cleaning up intermediate datasets..."
-rm -r "../datasets"
+#rm -r "../datasets"
 
 echo "Finished."
