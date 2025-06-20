@@ -1,7 +1,5 @@
 from pathlib import Path
 import ast
-import subprocess
-import math
 
 import pandas as pd
 from tqdm.auto import tqdm
@@ -15,20 +13,13 @@ OUTPUT_PATH = Path("../datasets/wikiconv.csv")
 CHUNK_SIZE = 100_000
 
 
-def get_num_chunks(file_path: Path, chunk_size: int) -> int:
-    result = subprocess.run(
-        ["wc", "-l", str(file_path)], capture_output=True, text=True
-    )
-    return math.ceil(int(result.stdout.strip().split()[0]) / chunk_size)
-
-
 def combine_dataset():
     first_chunk = True
     jsonl_files = list(INPUT_DIR.rglob("*.jsonl"))
     for file_path in tqdm(jsonl_files, desc="Files"):
         for chunk in tqdm(
             pd.read_json(file_path, lines=True, chunksize=CHUNK_SIZE),
-            total=get_num_chunks(file_path, CHUNK_SIZE),
+            total=preprocessing.get_num_chunks(file_path, CHUNK_SIZE),
             leave=False,
             desc="JSON files loaded",
         ):
@@ -43,7 +34,7 @@ def combine_dataset():
 
 def process_dataset():
     print("\t Estimating file size...")
-    chunks = get_num_chunks(INTERMEDIATE_CSV_PATH, CHUNK_SIZE)
+    chunks = preprocessing.get_num_chunks(INTERMEDIATE_CSV_PATH, CHUNK_SIZE)
     print(f"\t Found {chunks} chunks, of {CHUNK_SIZE} rows each.")
 
     first_chunk = True  # to control writing header only once
