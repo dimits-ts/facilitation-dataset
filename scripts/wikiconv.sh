@@ -13,7 +13,7 @@ if [ "$actual_count" -eq "$EXPECTED_DIRS" ]; then
 fi
 
 mkdir -p "$DOWNLOAD_DIR"
-wget -nc -r -nH --no-parent --cut-dirs=1 -P "$DOWNLOAD_DIR" "$URL" -A .zip
+wget --no-verbose -nc -r -nH --no-parent --cut-dirs=1 -P "$DOWNLOAD_DIR" "$URL" -A .zip
 
 # Parallel unzipping using xargs with 4 parallel processes (you can adjust -P)
 find "$ZIP_ROOT" -type f -name "full.corpus.zip" | \

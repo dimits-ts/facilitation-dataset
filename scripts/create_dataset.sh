@@ -8,14 +8,15 @@ if [ -f "$PEFK_PATH" ]; then
 fi
 
 touch "$LOG_FILE"
-# setup logging with timestamps
-exec > >(awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }' | tee "$LOG_FILE") 2>&1
+# setup no-buffer logging with timestamps
+exec > >(stdbuf -oL awk '{ print strftime("[%Y-%m-%d %H:%M:%S]"), $0; fflush(); }' | stdbuf -oL tee "$LOG_FILE") 2>&1
+
 
 mkdir -p "../datasets"
 mkdir -p "../downloads"
 
 # download datasets to ../downloads, then export them to ../datasets
-declare -a datasetnames=("ceri" "cmv_awry2" "umod" "vmd" "wikiconv" "wikidisputes" "wikitactics")
+declare -a datasetnames=("ceri" "cmv_awry2" "umod" "vmd" "wikidisputes" "wikitactics")
 
 for datasetname in "${datasetnames[@]}"; do
     echo "Downloading ${datasetname}..."
@@ -25,17 +26,15 @@ for datasetname in "${datasetnames[@]}"; do
 done
 
 # combine datasets into one
-echo "Combining datasets..."
-cd "../datasets"
-head -n 1 "$(ls *.csv | head -n 1)" > "$PEFK_PATH" && tail -n +2 -q *.csv >> "$PEFK_PATH"
-cd ".."
+echo "Processing final dataset..."
+python postprocessing.py
 
 echo  "Finished dataset construction."
 
 # clean-up to release disk space
 echo "Cleaning up downloads directory..."
-rm -r "./downloads"
+rm -r "../downloads"
 echo "Cleaning up intermediate datasets..."
-rm -r "./datasets"
+rm -r "../datasets"
 
 echo "Finished."
