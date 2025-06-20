@@ -80,7 +80,7 @@ def process_dataset():
         df = preprocessing_util.std_format_df(df)
 
         df.to_csv(
-            OUTPUT_PATH, mode="a", index=False, header=first_chunk, index=False
+            OUTPUT_PATH, mode="a", index=False, header=first_chunk
         )
         first_chunk = False  # header only for the first chunk
 
