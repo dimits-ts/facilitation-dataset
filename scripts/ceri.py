@@ -21,6 +21,7 @@ def rem_html_tags(raw_html: str) -> str:
     cleantext = re.sub(CLEAN_HTML_PATTERN, "", raw_html)
     return cleantext
 
+
 def main():
     df_dict = pd.read_excel(
         INPUT_PATH,
@@ -49,7 +50,7 @@ def main():
         axis=1,
     )
     df = preprocessing.std_format_df(df)
-    df.to_csv(OUTPUT_PATH)
+    df.to_csv(OUTPUT_PATH, index=False)
 
 
 if __name__ == "__main__":

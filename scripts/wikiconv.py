@@ -86,7 +86,9 @@ def process_dataset():
 
         df = preprocessing.std_format_df(df)
 
-        df.to_csv(OUTPUT_PATH, mode="a", index=False, header=first_chunk)
+        df.to_csv(
+            OUTPUT_PATH, mode="a", index=False, header=first_chunk, index=False
+        )
         first_chunk = False  # header only for the first chunk
 
 

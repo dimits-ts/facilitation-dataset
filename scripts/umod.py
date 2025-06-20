@@ -107,7 +107,7 @@ def main():
 
     df = df.rename(columns={"id": "conv_id"})
     df = preprocessing.std_format_df(df)
-    df.to_csv(OUTPUT_PATH)
+    df.to_csv(OUTPUT_PATH, index=False)
 
 
 if __name__ == "__main__":
