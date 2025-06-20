@@ -4,7 +4,7 @@ import json
 
 import pandas as pd
 
-import preprocessing
+from tasks import preprocessing_util
 
 
 INPUT_DIR = Path("../downloads/wikidisputes/data")
@@ -56,7 +56,7 @@ def main():
             "conversation.id": "message_id",
         }
     )
-    df = preprocessing.std_format_df(df)
+    df = preprocessing_util.std_format_df(df)
 
     df.to_csv(OUTPUT_PATH, index=False)
 

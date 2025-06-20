@@ -4,7 +4,7 @@ import ast
 import pandas as pd
 from tqdm.auto import tqdm
 
-import preprocessing
+from tasks import preprocessing_util
 
 
 INPUT_DIR = Path("../downloads/wikiconv")
@@ -19,7 +19,7 @@ def combine_dataset():
     for file_path in tqdm(jsonl_files, desc="Files"):
         for chunk in tqdm(
             pd.read_json(file_path, lines=True, chunksize=CHUNK_SIZE),
-            total=preprocessing.get_num_chunks(file_path, CHUNK_SIZE),
+            total=preprocessing_util.get_num_chunks(file_path, CHUNK_SIZE),
             leave=False,
             desc="JSON files loaded",
         ):
@@ -34,7 +34,9 @@ def combine_dataset():
 
 def process_dataset():
     print("\t Estimating file size...")
-    chunks = preprocessing.get_num_chunks(INTERMEDIATE_CSV_PATH, CHUNK_SIZE)
+    chunks = preprocessing_util.get_num_chunks(
+        INTERMEDIATE_CSV_PATH, CHUNK_SIZE
+    )
     print(f"\t Found {chunks} chunks, of {CHUNK_SIZE} rows each.")
 
     first_chunk = True  # to control writing header only once
@@ -75,7 +77,7 @@ def process_dataset():
             }
         )
 
-        df = preprocessing.std_format_df(df)
+        df = preprocessing_util.std_format_df(df)
 
         df.to_csv(
             OUTPUT_PATH, mode="a", index=False, header=first_chunk, index=False

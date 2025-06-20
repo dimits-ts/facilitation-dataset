@@ -1,13 +1,8 @@
 from pathlib import Path
-from typing import Any
-import json
-import ast
 
 import pandas as pd
-import numpy as np
-from tqdm.auto import tqdm
 
-import preprocessing
+from tasks import preprocessing_util
 
 
 INPUT_PATH = Path("../downloads/wikitactics/wikitactics.json")
@@ -68,7 +63,7 @@ def main():
     df["dataset"] = "wikitactics"
     # make sure message_id is unique across discussions
     df["message_id"] = df.apply(
-        lambda row: preprocessing.hash_to_md5(
+        lambda row: preprocessing_util.hash_to_md5(
             row.get("text") + row.get("conv_id")
         ),
         axis=1,
@@ -78,7 +73,7 @@ def main():
     df = df.groupby("conv_id", group_keys=False).apply(assign_reply_to)
     df["notes"] = None
     df = df.rename(columns={"username": "user"})
-    df = preprocessing.std_format_df(df)
+    df = preprocessing_util.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

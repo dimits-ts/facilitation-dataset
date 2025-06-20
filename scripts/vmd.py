@@ -1,13 +1,9 @@
 from pathlib import Path
-from typing import Any
-import json
-import ast
 
 import pandas as pd
-import numpy as np
-from tqdm.auto import tqdm
 
-import preprocessing
+from tasks import preprocessing_util
+
 
 INPUT_PATH = Path("../downloads/vmd/data/datasets/dataset.csv")
 OUTPUT_PATH = Path("../datasets/vmd.csv")
@@ -28,7 +24,8 @@ def get_arg_qual(annotation_str: str) -> float:
 
 
 def assign_reply_to(df):
-    # Sort by conv_id and some timestamp proxy, here assuming row order or message_id order
+    # Sort by conv_id and some timestamp proxy, here assuming row order or 
+    # message_id order
     df = df.sort_values(by=["conv_id", "message_id"]).reset_index(drop=True)
 
     # Create a new column with shifted message_ids within each conversation
@@ -61,7 +58,7 @@ def main():
     )
     df["dataset"] = "vmd"
     df = df.rename(columns={"message": "text"})
-    df = preprocessing.std_format_df(df)
+    df = preprocessing_util.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

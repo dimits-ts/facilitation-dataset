@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-import preprocessing
+from tasks import preprocessing_util
 
 
 INPUT_PATH = Path("../downloads/umod/umod.csv")
@@ -98,7 +98,7 @@ def main():
         df, exclude_cols=["id", "entropy_moderation", "text", "source"]
     )
 
-    df["message_id"] = df.text.apply(preprocessing.hash_to_md5)
+    df["message_id"] = df.text.apply(preprocessing_util.hash_to_md5)
     df["is_moderator"] = (df.source == "reply") & (df.entropy_moderation > 0.7)
     # all users are unique
     df["user"] = df.message_id
@@ -106,7 +106,7 @@ def main():
     df["reply_to"] = compute_reply_to(df)
 
     df = df.rename(columns={"id": "conv_id"})
-    df = preprocessing.std_format_df(df)
+    df = preprocessing_util.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 
