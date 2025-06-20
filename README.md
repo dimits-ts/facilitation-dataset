@@ -74,7 +74,7 @@ declare -a datasetnames=("ceri" "cmv_awry2" "umod" "vmd" "wikidisputes" "wikitac
     - DH6: Refutation of opponent's argument (with evidence or reasoning)
     - DH5: Counterargument with new evidence / reasoning
     - DH7: Refuting the central point
-- In UMOD, facilitative actions are marked as a gradient from 0 (no facilitation) to 1 (full facilitation). We adopt a threshold of 0.7 to consider an action as facilitative.
+- In UMOD, facilitative actions are marked as a gradient from 0 (no facilitation) to 1 (full facilitation). We adopt a threshold of 0.75 to consider an action as facilitative, with more than 50% annotator agreement (measured as entropy in the original dataset).
 
 
 ## Acknowledgement

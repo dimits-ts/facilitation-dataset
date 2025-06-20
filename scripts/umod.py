@@ -60,7 +60,7 @@ def compute_reply_to(
     Given a stacked DataFrame of conversation turns with source labels and
     unique IDs, returns a pd.Series `reply_to` where:
         - preceding_comment rows get NaN
-        - reply rows get the message_id of their corresponding 
+        - reply rows get the message_id of their corresponding
         preceding_comment (same conv_id)
 
     Args:
@@ -95,11 +95,24 @@ def main():
     df = pd.read_csv(INPUT_PATH, sep="\t")
     df = combine_comments(df)
     df = aggregate_notes(
-        df, exclude_cols=["id", "entropy_moderation", "text", "source"]
+        df,
+        exclude_cols=[
+            "id",
+            "entropy_moderation",
+            "text",
+            "source",
+            "softlabel_raw",
+        ],
     )
 
     df["message_id"] = df.text.apply(preprocessing_util.hash_to_md5)
-    df["is_moderator"] = (df.source == "reply") & (df.entropy_moderation > 0.7)
+    # if comment is reply, is 70% moderation (aggregated via labels) and
+    # if annotators are more than 50% confident
+    df["is_moderator"] = (
+        (df.source == "reply")
+        & (df.entropy_moderation <= 0.75)
+        & (df.softlabel_raw >= 0.75)
+    )
     # all users are unique
     df["user"] = df.message_id
     df["dataset"] = "umod"
