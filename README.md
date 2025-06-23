@@ -37,10 +37,10 @@ conda activate pefk-dataset
 bash create_dataset.sh
 ```
 
-You may select a subset of the above datasets to be aggregated by deleting any of the following entries in the `scripts/create_dataset.sh` file:
+You may select a subset of the above datasets to be aggregated by deleting any of the following entries in the `create_dataset.sh` script:
 
 ```bash
-declare -a datasetnames=("ceri" "cmv_awry2" "umod" "vmd" "wikidisputes" "wikitactics")
+bash master.sh ceri cmv_awry2 umod vmd wikiconv wikitactics | ts %Y-%m-%d_%H-%M-%S | tee "../$LOG_FILE"
 ``` 
 
 **Warning:** The WikiConv dataset is **extremely** large and may take multiple hours/days to download and process, depending on your hardware. It is recommended to initially skip this dataset.
