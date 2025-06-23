@@ -1,6 +1,6 @@
 # The PEFK dataset
 
-Repository housing the "Patterns of Engagement in Facilitated Konversations" (PEFK) dataset. This dataset is an aggregation and standardization of important facilitation datasets presented in Social Science literature. 
+Repository housing the "Prosocial and Effective Facilitation in Konversations" (PEFK) dataset. This dataset is an aggregation and standardization of important facilitation datasets presented in Social Science literature. 
 
 The dataset is provided as a large CSV file. Due to its overall size, it is not available directly on GitHub, but can be constructed by executing a shell script (see `Usage` Section).
 
@@ -34,7 +34,6 @@ cd facilitation-dataset
 conda env create -f environment.yml
 conda activate pefk-dataset
 
-cd scripts
 bash create_dataset.sh
 ```
 
