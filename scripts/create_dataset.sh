@@ -24,6 +24,8 @@ echo "Processing final dataset..."
 python postprocessing.py
 
 echo  "Finished dataset construction."
+python analysis.py
+
 
 # clean-up to release disk space
 echo "Cleaning up downloads directory..."

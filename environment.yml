@@ -1,4 +1,4 @@
-name: pefk_dataset
+name: pefk-dataset
 channels:
   - defaults
   - conda-forge
