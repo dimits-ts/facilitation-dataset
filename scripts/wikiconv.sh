@@ -19,6 +19,3 @@ echo "Unzipping datasets..."
 find "$ZIP_ROOT" -type f -name "full.corpus.zip" | \
   xargs -P 4 -I{} unzip -q -d "$DOWNLOAD_DIR" "{}"
 echo "Done."
-
-mv "$DOWNLOAD_DIR/datasets/wikiconv-corpus/blocks.json" "$DOWNLOAD_DIR"
-

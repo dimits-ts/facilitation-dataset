@@ -16,12 +16,12 @@ CHUNK_SIZE = 100_000
 def combine_dataset():
     first_chunk = True
     jsonl_files = list(INPUT_DIR.rglob("*.jsonl"))
-    for file_path in tqdm(jsonl_files, desc="Files"):
+    for file_path in tqdm(jsonl_files, desc="JSONL files"):
         for chunk in tqdm(
             pd.read_json(file_path, lines=True, chunksize=CHUNK_SIZE),
             total=preprocessing_util.get_num_chunks(file_path, CHUNK_SIZE),
             leave=False,
-            desc="JSON files loaded",
+            desc="JSONL chunks processed",
         ):
             chunk.to_csv(
                 INTERMEDIATE_CSV_PATH,
@@ -86,8 +86,8 @@ def process_dataset():
 
 
 if __name__ == "__main__":
-    print("Converting dataset...")
+    print("Converting yearly JSONL datasets to unified CSV...")
     combine_dataset()
-    print("Processing dataset...")
+    print("Processing CSV dataset...")
     process_dataset()
     print("Done.")
