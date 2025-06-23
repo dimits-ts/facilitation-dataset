@@ -17,6 +17,7 @@ def convert_bytes(num):
 
 
 def main():
+    print("Loading dataset to extract statistics...")
     df = pd.read_csv(INPUT_PATH)
 
     print("Dataset sample:")
