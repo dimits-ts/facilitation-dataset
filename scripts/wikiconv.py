@@ -11,9 +11,7 @@ OUTPUT_PATH = Path("../datasets/wikiconv.csv")
 CHUNK_SIZE = 100_000
 
 
-def process_dataset(df):
-    df = df.dropna(subset=["text"])
-
+def add_notes(df):
     # normalize meta json object
     meta_df = pd.json_normalize(df.meta)
     meta_df = meta_df.add_prefix("meta.")
@@ -23,9 +21,6 @@ def process_dataset(df):
         axis=1,
     )
     df = df.drop(columns=["meta"])
-
-    df["is_moderator"] = False
-    df["dataset"] = "wikiconv"
     df["notes"] = df.apply(
         lambda row: {
             "toxicity": row.get("meta.toxicity"),
@@ -33,7 +28,16 @@ def process_dataset(df):
         },
         axis=1,
     )
+    return df
 
+
+def add_meta_cols(df):
+    df["is_moderator"] = False
+    df["dataset"] = "wikiconv"
+    return df
+
+
+def conform_to_pefk(df):
     df = df.rename(
         columns={
             "conversation_id": "conv_id",
@@ -44,6 +48,14 @@ def process_dataset(df):
     )
 
     df = preprocessing_util.std_format_df(df)
+    return df
+
+
+def process_dataset(df):
+    df = df.dropna(subset=["text"])
+    df = add_notes(df)
+    df = add_meta_cols(df)
+    df = conform_to_pefk(df)
     return df
 
 
