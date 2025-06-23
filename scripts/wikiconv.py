@@ -11,6 +11,42 @@ OUTPUT_PATH = Path("../datasets/wikiconv.csv")
 CHUNK_SIZE = 100_000
 
 
+def main():
+    first_chunk = True
+    jsonl_files = list(INPUT_DIR.rglob("*.jsonl"))
+    for file_path in tqdm(jsonl_files, desc="Yearly datasets"):
+        for chunk in tqdm(
+            pd.read_json(file_path, lines=True, chunksize=CHUNK_SIZE),
+            total=preprocessing_util.get_num_chunks(file_path, CHUNK_SIZE),
+            leave=False,
+            desc="Dataset chunks",
+        ):
+            df = process_dataset(chunk)
+            df.to_csv(
+                OUTPUT_PATH,
+                mode="a",
+                index=False,
+                header=first_chunk,
+            )
+            first_chunk = False
+
+
+def process_dataset(df):
+    df = df.dropna(subset=["text"])
+    df = add_notes(df)
+    df = add_meta_cols(df)
+    df = conform_to_pefk(df)
+
+    # Filter out conversations with only one user commenting
+    discussion_indices = get_discussion_ids(df)
+
+    print(
+        f"Filtering out {len(discussion_indices)} out of {CHUNK_SIZE} comments"
+    )
+    df = df[df.conv_id.isin(discussion_indices)]
+    return df
+
+
 def add_notes(df):
     # normalize meta json object
     meta_df = pd.json_normalize(df.meta)
@@ -51,32 +87,10 @@ def conform_to_pefk(df):
     return df
 
 
-def process_dataset(df):
-    df = df.dropna(subset=["text"])
-    df = add_notes(df)
-    df = add_meta_cols(df)
-    df = conform_to_pefk(df)
-    return df
-
-
-def main():
-    first_chunk = True
-    jsonl_files = list(INPUT_DIR.rglob("*.jsonl"))
-    for file_path in tqdm(jsonl_files, desc="Yearly datasets"):
-        for chunk in tqdm(
-            pd.read_json(file_path, lines=True, chunksize=CHUNK_SIZE),
-            total=preprocessing_util.get_num_chunks(file_path, CHUNK_SIZE),
-            leave=False,
-            desc="Dataset chunks",
-        ):
-            df = process_dataset(chunk)
-            df.to_csv(
-                OUTPUT_PATH,
-                mode="a",
-                index=False,
-                header=first_chunk,
-            )
-            first_chunk = False
+def get_discussion_ids(df):
+    user_counts = df.groupby("conv_id")["user"].nunique()
+    valid_discussions = user_counts[user_counts > 1]
+    return valid_discussions.index.tolist()
 
 
 if __name__ == "__main__":
