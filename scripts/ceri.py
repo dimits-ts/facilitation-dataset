@@ -2,10 +2,9 @@ from pathlib import Path
 import re
 
 import pandas as pd
-import numpy as np
-from tqdm.auto import tqdm
 
-import preprocessing
+from tasks import preprocessing_util
+
 
 INPUT_PATH = Path("../downloads/ceri/ceri.xlsx")
 OUTPUT_PATH = Path("../datasets/ceri.csv")
@@ -21,6 +20,7 @@ def rem_html_tags(raw_html: str) -> str:
     cleantext = re.sub(CLEAN_HTML_PATTERN, "", raw_html)
     return cleantext
 
+
 def main():
     df_dict = pd.read_excel(
         INPUT_PATH,
@@ -31,7 +31,9 @@ def main():
 
     df["COMMENT"] = df["COMMENT"].apply(rem_html_tags)
     df["is_moderator"] = df["USER LOGIN"].apply(is_moderator)
-    df["POST ID"] = df["POST ID"].astype(str).apply(preprocessing.hash_to_md5)
+    df["POST ID"] = (
+        df["POST ID"].astype(str).apply(preprocessing_util.hash_to_md5)
+    )
     df["COMMENT PARENT"] = df["COMMENT PARENT"].apply(
         lambda _id: None if _id == 0 else _id
     )
@@ -48,8 +50,8 @@ def main():
         },
         axis=1,
     )
-    df = preprocessing.std_format_df(df)
-    df.to_csv(OUTPUT_PATH)
+    df = preprocessing_util.std_format_df(df)
+    df.to_csv(OUTPUT_PATH, index=False)
 
 
 if __name__ == "__main__":

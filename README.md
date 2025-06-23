@@ -1,6 +1,6 @@
 # The PEFK dataset
 
-Repository housing the "Patterns of Engagement in Facilitated Konversations" (PEFK) dataset. This dataset is an aggregation and standardization of important facilitation datasets presented in Social Science literature. 
+Repository housing the "Prosocial and Effective Facilitation in Konversations" (PEFK) dataset. This dataset is an aggregation and standardization of important facilitation datasets presented in Social Science literature. 
 
 The dataset is provided as a large CSV file. Due to its overall size, it is not available directly on GitHub, but can be constructed by executing a shell script (see `Usage` Section).
 
@@ -34,14 +34,13 @@ cd facilitation-dataset
 conda env create -f environment.yml
 conda activate pefk-dataset
 
-cd scripts
 bash create_dataset.sh
 ```
 
-You may select a subset of the above datasets to be aggregated by deleting any of the following entries in the `scripts/create_dataset.sh` file:
+You may select a subset of the above datasets to be aggregated by deleting any of the following entries in the `create_dataset.sh` script:
 
 ```bash
-declare -a datasetnames=("ceri" "cmv_awry2" "umod" "vmd" "wikidisputes" "wikitactics")
+bash master.sh ceri cmv_awry2 umod vmd wikiconv wikitactics | ts %Y-%m-%d_%H-%M-%S | tee "../$LOG_FILE"
 ``` 
 
 **Warning:** The WikiConv dataset is **extremely** large and may take multiple hours/days to download and process, depending on your hardware. It is recommended to initially skip this dataset.
@@ -74,7 +73,7 @@ declare -a datasetnames=("ceri" "cmv_awry2" "umod" "vmd" "wikidisputes" "wikitac
     - DH6: Refutation of opponent's argument (with evidence or reasoning)
     - DH5: Counterargument with new evidence / reasoning
     - DH7: Refuting the central point
-- In UMOD, facilitative actions are marked as a gradient from 0 (no facilitation) to 1 (full facilitation). We adopt a threshold of 0.7 to consider an action as facilitative.
+- In UMOD, facilitative actions are marked as a gradient from 0 (no facilitation) to 1 (full facilitation). We adopt a threshold of 0.75 to consider an action as facilitative, with more than 50% annotator agreement (measured as entropy in the original dataset).
 
 
 ## Acknowledgement

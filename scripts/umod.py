@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-import preprocessing
+from tasks import preprocessing_util
 
 
 INPUT_PATH = Path("../downloads/umod/umod.csv")
@@ -60,7 +60,7 @@ def compute_reply_to(
     Given a stacked DataFrame of conversation turns with source labels and
     unique IDs, returns a pd.Series `reply_to` where:
         - preceding_comment rows get NaN
-        - reply rows get the message_id of their corresponding 
+        - reply rows get the message_id of their corresponding
         preceding_comment (same conv_id)
 
     Args:
@@ -95,19 +95,32 @@ def main():
     df = pd.read_csv(INPUT_PATH, sep="\t")
     df = combine_comments(df)
     df = aggregate_notes(
-        df, exclude_cols=["id", "entropy_moderation", "text", "source"]
+        df,
+        exclude_cols=[
+            "id",
+            "entropy_moderation",
+            "text",
+            "source",
+            "softlabel_raw",
+        ],
     )
 
-    df["message_id"] = df.text.apply(preprocessing.hash_to_md5)
-    df["is_moderator"] = (df.source == "reply") & (df.entropy_moderation > 0.7)
+    df["message_id"] = df.text.apply(preprocessing_util.hash_to_md5)
+    # if comment is reply, is 70% moderation (aggregated via labels) and
+    # if annotators are more than 50% confident
+    df["is_moderator"] = (
+        (df.source == "reply")
+        & (df.entropy_moderation <= 0.75)
+        & (df.softlabel_raw >= 0.75)
+    )
     # all users are unique
     df["user"] = df.message_id
     df["dataset"] = "umod"
     df["reply_to"] = compute_reply_to(df)
 
     df = df.rename(columns={"id": "conv_id"})
-    df = preprocessing.std_format_df(df)
-    df.to_csv(OUTPUT_PATH)
+    df = preprocessing_util.std_format_df(df)
+    df.to_csv(OUTPUT_PATH, index=False)
 
 
 if __name__ == "__main__":

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-import preprocessing
+from tasks import preprocessing_util
 
 
 INPUT_PATH = Path(
@@ -29,8 +29,8 @@ def main():
             "meta": "notes",
         }
     )
-    df = preprocessing.std_format_df(df)
-    df.to_csv(OUTPUT_PATH)
+    df = preprocessing_util.std_format_df(df)
+    df.to_csv(OUTPUT_PATH, index=False)
 
 
 if __name__ == "__main__":

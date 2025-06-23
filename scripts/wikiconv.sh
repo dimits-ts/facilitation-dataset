@@ -13,13 +13,9 @@ if [ "$actual_count" -eq "$EXPECTED_DIRS" ]; then
 fi
 
 mkdir -p "$DOWNLOAD_DIR"
-wget -nc -r -nH --no-parent --cut-dirs=1 -P "$DOWNLOAD_DIR" "$URL" -A .zip
+wget --no-verbose -nc -r -nH --no-parent --cut-dirs=1 -P "$DOWNLOAD_DIR" "$URL" -A .zip
 
-# Parallel unzipping using xargs with 4 parallel processes (you can adjust -P)
+echo "Unzipping datasets..."
 find "$ZIP_ROOT" -type f -name "full.corpus.zip" | \
-  xargs -P 4 -I{} unzip {} -q -d "$DOWNLOAD_DIR"
-
-mv "$DOWNLOAD_DIR/datasets/wikiconv-corpus/blocks.json" "$DOWNLOAD_DIR"
-
-# Cleanup
-rm -r "$DOWNLOAD_DIR/datasets"
+  xargs -P 4 -I{} unzip -q -d "$DOWNLOAD_DIR" "{}"
+echo "Done."
