@@ -65,6 +65,10 @@ bash master.sh ceri cmv_awry2 umod vmd wikiconv wikitactics iq2 | ts %Y-%m-%d_%H
 
 - We exclude comments with no text
 - The Wikiconv corpus does not contain information about which user is a moderator/facilitator. Therefore, all comments relating to Wikiconv are tagged as non-moderators
+    - Additionally, we follow the [instructions of the original researchers](https://github.com/conversationai/wikidetox/blob/main/wikiconv/README.md), and select only discussions which have at least two comments by different users
+        - Wikipedia (rightfully) does not track users who log in with only an IP address; their user_id is always set to 0 and their username is of the form 211.111.111.xxx. We consider each username following the format above as a separate user.
+        - Due to the size of the dataset, we have to partially load it during preprocessing. Thus, there is a small chance every 100,000 records that a discussion is marked as a false negative and a part of it gets discarded.
+    - We only include English comments in the final dataset. We use a small, efficient library (`py3langid`) for language recongition, due to the large size of Wikiconv. We include every comment that is English with a confidence score of more than 75%. This can be trivially tuned in the `scripts/wikiconv.py` file. Non-english comments are discarded *before* selecting valid discussions (see point above).
 - In WikiDisputes, we infer facilitative actions by whether the comment belongs in any of the following categories:
     - Asking questions
     - Coordinating edits
@@ -75,8 +79,9 @@ bash master.sh ceri cmv_awry2 umod vmd wikiconv wikitactics iq2 | ts %Y-%m-%d_%H
     - DH5: Counterargument with new evidence / reasoning
     - DH7: Refuting the central point
 - In UMOD, facilitative actions are marked as a gradient from 0 (no facilitation) to 1 (full facilitation). We adopt a threshold of 0.75 to consider an action as facilitative, with more than 50% annotator agreement (measured as entropy in the original dataset).
+- In IQ2, we remove verbal linguistic markers ("...", "uh,").
 
 
-## Acknowledgement
+## Acknowledgements
 
 This work has been partially supported by project MIS 5154714 of the National Recovery and Resilience Plan Greece 2.0 funded by the European Union under the NextGenerationEU Program.
