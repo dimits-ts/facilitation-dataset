@@ -18,6 +18,7 @@ The dataset is released under a CC-BY-SA License, and the code producing it uses
 - [CeRI data](https://dl.acm.org/doi/10.1145/2307729.2307757)
 - [UMOD](https://aclanthology.org/2024.eacl-long.60/)
 - [VMD](https://arxiv.org/abs/2503.16505)
+- [Intelligence Squared 2](https://aclanthology.org/N16-1017/)
 
 A list of references for each of the papers presenting the datasets can be found in the [refs.bib](refs.bib) file.
 
@@ -40,13 +41,13 @@ bash create_dataset.sh
 You may select a subset of the above datasets to be aggregated by deleting any of the following entries in the `create_dataset.sh` script:
 
 ```bash
-bash master.sh ceri cmv_awry2 umod vmd wikiconv wikitactics | ts %Y-%m-%d_%H-%M-%S | tee "../$LOG_FILE"
+bash master.sh ceri cmv_awry2 umod vmd wikiconv wikitactics iq2 | ts %Y-%m-%d_%H-%M-%S | tee "../$LOG_FILE"
 ``` 
 
-**Warning:** The WikiConv dataset is **extremely** large and may take multiple hours/days to download and process, depending on your hardware. It is recommended to initially skip this dataset.
+**Warning:** The WikiConv dataset is **extremely** large and may take multiple hours to download and process, depending on your hardware.
+
 
 ## Dataset Description
-
 
 | Name        | Type   | Description                                                                 |
 |-------------|--------|-----------------------------------------------------------------------------|
