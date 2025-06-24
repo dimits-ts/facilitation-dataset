@@ -44,12 +44,12 @@ def process_dataset(df):
         )
     )
 
+    tqdm.pandas(desc="Detecting language", leave=False)
+    df = df[df.text.astype(str).progress_apply(is_english)]
+
     # Filter out conversations with only one user commenting
     valid_discussion_ids = get_valid_discussion_ids(df)
     df = df[df.conversation_id.isin(valid_discussion_ids)]
-
-    tqdm.pandas(desc="Detecting language", leave=False)
-    df = df[df.text.astype(str).progress_apply(is_english)]
 
     df = add_notes(df)
     df = add_meta_cols(df)
