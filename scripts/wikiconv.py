@@ -38,7 +38,7 @@ def process_dataset(df):
     # masked IP addresses are tracked to the same user_id
     # (found in wikiconv-20**/speakers.json). Thus, to be safe, we consider
     # them as separate, unique users
-    df.speaker = df.speaker.apply(
+    df.speaker = df.speaker.astype(str).apply(
         lambda x: (
             x if not x.endswith("xxx") else f"unknown-user-{uuid.uuid4().int}"
         )
@@ -49,7 +49,7 @@ def process_dataset(df):
     df = df[df.conversation_id.isin(valid_discussion_ids)]
 
     tqdm.pandas(desc="Detecting language", leave=False)
-    df = df[df.text.progress_apply(is_english)]
+    df = df[df.text.astype(str).progress_apply(is_english)]
 
     df = add_notes(df)
     df = add_meta_cols(df)
@@ -110,8 +110,11 @@ def is_english(text: str) -> bool:
     :param text: string to check language of
     :return: True if the text is in English, False otherwise
     """
-    lang, prob = langid.classify(text)
-    return lang == "en" and prob >= 0.7
+    try:
+        lang, prob = langid.classify(text)
+        return lang == "en" and prob >= 0.7
+    except Exception:
+        return False
 
 
 if __name__ == "__main__":
