@@ -9,3 +9,6 @@ dependencies:
   - tqdm
   - openpyxl
   - moreutils
+  - pip
+  - pip:
+      - py3langid
