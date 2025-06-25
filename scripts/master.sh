@@ -30,8 +30,8 @@ python analysis.py
 
 # clean-up to release disk space_
 echo "Cleaning up downloads directory..."
-rm -r "../downloads"
+#rm -r "../downloads"
 echo "Cleaning up intermediate datasets..."
-rm -r "../datasets"
+#rm -r "../datasets"
 
 echo "Finished."
