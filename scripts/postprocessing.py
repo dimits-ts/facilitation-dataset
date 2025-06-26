@@ -7,34 +7,34 @@ from tasks import preprocessing_util
 
 INPUT_DIR = Path("../datasets")
 OUTPUT_PATH = Path("../pefk.csv")
-CHUNK_SIZE = 100_000
+
+
+def get_unified_dataset(input_dir: Path) -> pd.DataFrame:
+    for file_path in tqdm(input_dir.rglob("*.csv"), desc="Combining datasets"):
+        dfs = []
+        try:
+            df = pd.read_csv(file_path)
+            dfs.append(df)
+        except Exception as e:
+            print(f"Error processing {file_path}: {e}")
+    full_df = pd.concat(dfs)
+    return full_df
+
+
+def discard_one_man_convs(df: pd.DataFrame) -> pd.DataFrame:
+    valid_ids = preprocessing_util.get_valid_discussion_ids(
+        df, conv_id_col="conv_id", user_col="user"
+    )
+    print(f"Keeping {len(valid_ids)} valid comments, out of {df.shape[0]}.")
+    df = df[df.conv_id.isin(valid_ids)]
+    return df
 
 
 def main():
-    first_chunk = True  # Track whether to write header
-
-    for file_path in INPUT_DIR.iterdir():
-        print(f"Processing {file_path.name}...")
-        if file_path.suffix == ".csv":
-            try:
-                for chunk in tqdm(
-                    pd.read_csv(file_path, chunksize=CHUNK_SIZE),
-                    total=preprocessing_util.get_num_chunks(
-                        file_path=file_path, chunk_size=CHUNK_SIZE
-                    ),
-                    desc="Exporting"
-                ):
-                    chunk.to_csv(
-                        OUTPUT_PATH,
-                        mode="w" if first_chunk else "a",
-                        index=False,
-                        header=first_chunk,
-                    )
-                    first_chunk = False
-                print(f"{file_path.name} exported to unified dataset.")
-
-            except Exception as e:
-                print(f"Error processing {file_path}: {e}")
+    df = get_unified_dataset(INPUT_DIR)
+    df = discard_one_man_convs(df)
+    df.to_csv(OUTPUT_PATH, index=False)
+    print(f"Dataset exported as {OUTPUT_PATH}")
 
 
 if __name__ == "__main__":
