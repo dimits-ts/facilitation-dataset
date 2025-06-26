@@ -1,6 +1,7 @@
 datasets/
 downloads/
-results/
+results_whole_model/
+results_only_head/
 *.csv
 *.log
 

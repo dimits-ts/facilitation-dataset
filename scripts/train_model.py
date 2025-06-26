@@ -13,7 +13,7 @@ SEED = 42
 GRAD_ACC_STEPS = 2
 EVAL_STEPS = 3000
 
-OUTPUT_DIR = Path("../results")
+OUTPUT_DIR = Path("../results_only_head")
 LOGS_DIR = Path("../logs")
 
 
@@ -113,7 +113,13 @@ def compute_metrics(eval_pred):
     }
 
 
-def train_model(model, tokenizer, train_dat, val_dat, test_dat):
+def train_model(
+    model, tokenizer, train_dat, val_dat, test_dat, freeze_base_model: bool
+):
+    if freeze_base_model:
+        for param in model.base_model.parameters():
+            param.requires_grad = False
+
     training_args = transformers.TrainingArguments(
         output_dir="../results/training",
         per_device_train_batch_size=5,
@@ -161,7 +167,14 @@ def main():
     train_dataset, val_dataset, test_dataset = df_to_train_val_test_dataset(
         df, tokenizer
     )
-    train_model(model, tokenizer, train_dataset, val_dataset, test_dataset)
+    train_model(
+        model,
+        tokenizer,
+        train_dataset,
+        val_dataset,
+        test_dataset,
+        freeze_base_model=True,
+    )
 
 
 if __name__ == "__main__":
