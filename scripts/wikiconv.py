@@ -39,16 +39,16 @@ def process_dataset(df):
     # (found in wikiconv-20**/speakers.json). Thus, to be safe, we consider
     # them as separate, unique users
     df.speaker = df.speaker.astype(str).apply(
-        lambda x: (
-            x if not x.endswith("xxx") else f"unknown-user-{uuid.uuid4().int}"
-        )
+        lambda x: (x if not x.endswith("xxx") else f"unknown-user-{uuid.uuid4().int}")
     )
 
     tqdm.pandas(desc="Detecting language", leave=False)
     df = df[df.text.astype(str).progress_apply(is_english)]
 
     # Filter out conversations with only one user commenting
-    valid_discussion_ids = get_valid_discussion_ids(df)
+    valid_discussion_ids = preprocessing_util.get_valid_discussion_ids(
+        df, conv_id_col="conversation_id", user_col="speaker"
+    )
     df = df[df.conversation_id.isin(valid_discussion_ids)]
 
     df = add_notes(df)
@@ -95,12 +95,6 @@ def conform_to_pefk(df):
 
     df = preprocessing_util.std_format_df(df)
     return df
-
-
-def get_valid_discussion_ids(df):
-    user_counts = df.groupby("conversation_id")["speaker"].nunique()
-    valid_discussions = user_counts[user_counts > 1]
-    return valid_discussions.index.tolist()
 
 
 def is_english(text: str) -> bool:

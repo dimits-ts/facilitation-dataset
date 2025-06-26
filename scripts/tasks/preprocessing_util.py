@@ -79,3 +79,9 @@ def get_num_chunks(file_path: Path, chunk_size: int) -> int:
         ["wc", "-l", str(file_path)], capture_output=True, text=True
     )
     return math.ceil(int(result.stdout.strip().split()[0]) / chunk_size)
+
+
+def get_valid_discussion_ids(df, conv_id_col: str, user_col: str):
+    user_counts = df.groupby()["speaker"].nunique()
+    valid_discussions = user_counts[user_counts > 1]
+    return valid_discussions.index.tolist()
