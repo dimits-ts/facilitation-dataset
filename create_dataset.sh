@@ -1,4 +1,5 @@
-LOG_FILE="logfile.log"
+mkdir -p "logs"
+LOG_FILE="logs/pefk.log"
 touch $LOG_FILE
 
 cd scripts

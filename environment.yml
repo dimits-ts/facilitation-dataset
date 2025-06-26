@@ -5,10 +5,17 @@ channels:
 dependencies:
   - python
   - pandas
-  - numpy
+  - numpy<2.0
   - tqdm
   - openpyxl
   - moreutils
+  - datasets
+  - scikit-learn
+  - notebook 
+  - ipywidgets
   - pip
   - pip:
       - py3langid
+      - accelerate>=0.26.0
+      - torch
+      - transformers
