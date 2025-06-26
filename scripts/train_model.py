@@ -12,6 +12,8 @@ MAX_LENGTH = 2048
 SEED = 42
 GRAD_ACC_STEPS = 2
 EVAL_STEPS = 3000
+EPOCHS = 3
+BATCH_SIZE = 4
 
 OUTPUT_DIR = Path("../results_only_head")
 LOGS_DIR = Path("../logs")
@@ -121,16 +123,16 @@ def train_model(
             param.requires_grad = False
 
     training_args = transformers.TrainingArguments(
-        output_dir="../results/training",
-        per_device_train_batch_size=5,
-        per_device_eval_batch_size=5,
-        num_train_epochs=3,
+        output_dir=OUTPUT_DIR,
+        per_device_train_batch_size=BATCH_SIZE,
+        per_device_eval_batch_size=BATCH_SIZE,
+        num_train_epochs=EPOCHS,
         eval_strategy="steps",
         eval_steps=int(EVAL_STEPS / GRAD_ACC_STEPS),
         save_strategy="steps",
         save_steps=int(EVAL_STEPS / GRAD_ACC_STEPS),
         logging_strategy="steps",
-        logging_dir="../logs",
+        logging_dir=LOGS_DIR,
         logging_steps=int(EVAL_STEPS / GRAD_ACC_STEPS),
         load_best_model_at_end=True,
         metric_for_best_model="f1",
