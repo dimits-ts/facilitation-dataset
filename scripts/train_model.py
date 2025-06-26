@@ -10,10 +10,12 @@ import sklearn.metrics
 
 MAX_LENGTH = 2048
 SEED = 42
-GRAD_ACC_STEPS = 2
-EVAL_STEPS = 3000
+GRAD_ACC_STEPS = 1
+EVAL_STEPS = 500
 EPOCHS = 3
-BATCH_SIZE = 4
+BATCH_SIZE = 64
+EARLY_STOP_THRESHOLD = 10e-5
+EARLY_STOP_PATIENCE = 3
 
 OUTPUT_DIR = Path("../results_only_head")
 LOGS_DIR = Path("../logs")
@@ -22,7 +24,7 @@ LOGS_DIR = Path("../logs")
 def preprocess_dataset(df: pd.DataFrame) -> pd.DataFrame:
     df = df[df.dataset.isin(["wikidisputes", "wikitactics"])]
     df = df.reset_index()
-    df.is_moderator = df.is_moderator.astype(int)
+    df.is_moderator = df.is_moderator.astype(float)
     return df
 
 
@@ -61,10 +63,18 @@ def tokenize_function(tokenizer, example):
 
 
 def torch_dataset(x, y, tokenizer):
-    dataset = datasets.Dataset.from_dict({"text": x, "label": y})
+    # Ensure labels are float and shaped (N, 1)
+    y = [float(label) for label in y]  # convert to float
+    dataset = datasets.Dataset.from_dict({"text": x, "labels": y})
     dataset = dataset.map(lambda x: tokenize_function(tokenizer, x), batched=True)
-    dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "label"])
+    dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
+    dataset = dataset.map(reshape_labels)
     return dataset
+
+
+def reshape_labels(example):
+    example["labels"] = torch.tensor([example["labels"]], dtype=torch.float32)
+    return example
 
 
 def build_discussion_dataset(df, context_window=3):
@@ -136,7 +146,13 @@ def train_model(
         logging_steps=int(EVAL_STEPS / GRAD_ACC_STEPS),
         load_best_model_at_end=True,
         metric_for_best_model="f1",
+        greater_is_better=True,
         gradient_accumulation_steps=GRAD_ACC_STEPS,
+    )
+
+    early_stopping = transformers.EarlyStoppingCallback(
+        early_stopping_patience=EARLY_STOP_PATIENCE,
+        early_stopping_threshold=EARLY_STOP_THRESHOLD,
     )
 
     trainer = transformers.Trainer(
@@ -145,6 +161,7 @@ def train_model(
         train_dataset=train_dat,
         eval_dataset=val_dat,
         compute_metrics=compute_metrics,
+        callbacks=early_stopping,
     )
     trainer.train()
 
@@ -159,6 +176,8 @@ def main():
     set_seed(SEED)
     model = transformers.LongformerForSequenceClassification.from_pretrained(
         "allenai/longformer-base-4096",
+        num_labels=1,
+        problem_type="multi_label_classification",
     )
     tokenizer = transformers.LongformerTokenizerFast.from_pretrained(
         "allenai/longformer-base-4096", max_length=MAX_LENGTH
