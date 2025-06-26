@@ -161,7 +161,7 @@ def train_model(
         train_dataset=train_dat,
         eval_dataset=val_dat,
         compute_metrics=compute_metrics,
-        callbacks=early_stopping,
+        callbacks=[early_stopping],
     )
     trainer.train()
 
