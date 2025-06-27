@@ -6,13 +6,14 @@ import torch
 import transformers
 import datasets
 import sklearn.metrics
+from sklearn.model_selection import train_test_split
 
 
 MAX_LENGTH = 2048
 SEED = 42
 GRAD_ACC_STEPS = 1
-EVAL_STEPS = 500
-EPOCHS = 3
+EVAL_STEPS = 150
+EPOCHS = 50
 BATCH_SIZE = 64
 EARLY_STOP_THRESHOLD = 10e-5
 EARLY_STOP_PATIENCE = 3
@@ -22,7 +23,7 @@ LOGS_DIR = Path("../logs")
 
 
 def preprocess_dataset(df: pd.DataFrame) -> pd.DataFrame:
-    df = df[df.dataset.isin(["wikidisputes", "wikitactics"])]
+    df = df[df.dataset.isin(["wikitactics"])]
     df = df.reset_index()
     df.is_moderator = df.is_moderator.astype(float)
     return df
@@ -37,7 +38,11 @@ def set_seed(seed):
 
 def df_to_train_val_test_dataset(df: pd.DataFrame, tokenizer) -> pd.DataFrame:
     train_df, val_df, test_df = train_validate_test_split(
-        df, train_percent=0.8, validate_percent=0.1, seed=SEED
+        df,
+        stratify_col="is_moderator",
+        train_percent=0.75,
+        validate_percent=0.15,
+        seed=SEED,
     )
 
     train_dataset = df_to_dataset(train_df, tokenizer)
@@ -66,8 +71,12 @@ def torch_dataset(x, y, tokenizer):
     # Ensure labels are float and shaped (N, 1)
     y = [float(label) for label in y]  # convert to float
     dataset = datasets.Dataset.from_dict({"text": x, "labels": y})
-    dataset = dataset.map(lambda x: tokenize_function(tokenizer, x), batched=True)
-    dataset.set_format(type="torch", columns=["input_ids", "attention_mask", "labels"])
+    dataset = dataset.map(
+        lambda x: tokenize_function(tokenizer, x), batched=True
+    )
+    dataset.set_format(
+        type="torch", columns=["input_ids", "attention_mask", "labels"]
+    )
     dataset = dataset.map(reshape_labels)
     return dataset
 
@@ -91,7 +100,8 @@ def build_discussion_dataset(df, context_window=3):
             # Get previous `context_window` comments
             start = max(0, i - context_window)
             context = [
-                f"<TURN> User {users[j]} posted: {texts[j]}" for j in range(start, i)
+                f"<TURN> User {users[j]} posted: {texts[j]}"
+                for j in range(start, i)
             ]
 
             current = f"<TURN> User {users[i]} posted: {texts[i]}"
@@ -104,15 +114,26 @@ def build_discussion_dataset(df, context_window=3):
     return inputs, outputs
 
 
-def train_validate_test_split(df, train_percent=0.6, validate_percent=0.2, seed=None):
-    np.random.seed(seed)
-    perm = np.random.permutation(df.index)
-    m = len(df.index)
-    train_end = int(train_percent * m)
-    validate_end = int(validate_percent * m) + train_end
-    train = df.iloc[perm[:train_end]]
-    validate = df.iloc[perm[train_end:validate_end]]
-    test = df.iloc[perm[validate_end:]]
+def train_validate_test_split(
+    df, stratify_col, train_percent=0.6, validate_percent=0.2, seed=None
+):
+    # First split into train and temp (validate + test)
+    train, temp = train_test_split(
+        df,
+        stratify=df[stratify_col],
+        test_size=1 - train_percent,
+        random_state=seed,
+    )
+
+    # Then split temp into validate and test
+    validate_size = validate_percent / (1 - train_percent)
+    validate, test = train_test_split(
+        temp,
+        stratify=temp[stratify_col],
+        test_size=1 - validate_size,
+        random_state=seed,
+    )
+
     return train, validate, test
 
 
