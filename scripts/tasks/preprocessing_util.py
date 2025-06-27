@@ -82,6 +82,6 @@ def get_num_chunks(file_path: Path, chunk_size: int) -> int:
 
 
 def get_valid_discussion_ids(df, conv_id_col: str, user_col: str):
-    user_counts = df.groupby()["speaker"].nunique()
+    user_counts = df.groupby(conv_id_col)[user_col].nunique()
     valid_discussions = user_counts[user_counts > 1]
     return valid_discussions.index.tolist()
