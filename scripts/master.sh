@@ -10,15 +10,16 @@ mkdir -p "../datasets"
 mkdir -p "../downloads"
 
 # Accept datasets from command line arguments
-[[ $# -eq 0 ]] && echo "Usage: $0 dataset1[dataset2...] [dataset3...]" && exit 0
+[[ $# -eq 0 ]] && echo "Usage: $0 dataset1 [dataset2...] [dataset3...]" && exit 1
 
-datasets=($1 $2 $3 $4 $5 $6)
+datasets=("$@")
 
 for datasetname in "${datasets[@]}"; do
     echo "Downloading ${datasetname}..."
     bash "$datasetname.sh"
     echo "Processing ${datasetname}..."
     python "$datasetname.py"
+    echo "Exported $datasetname.csv"
 done
 
 # combine datasets into one_
