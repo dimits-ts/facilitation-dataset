@@ -42,6 +42,11 @@ def main():
     )
 
     print("*" * 25)
+    print("Percentage of moderator comments per dataset:")
+    moderator_percent = df.groupby("dataset")["is_moderator"].mean() * 100
+    print(moderator_percent.round(2).astype(str) + " %")
+
+    print("*" * 25)
     print(f"Dataset total size: {convert_bytes(INPUT_PATH.stat().st_size)}")
 
 
