@@ -10,14 +10,16 @@ OUTPUT_PATH = Path("../pefk.csv")
 
 
 def get_unified_dataset(input_dir: Path) -> pd.DataFrame:
-    for file_path in tqdm(input_dir.rglob("*.csv"), desc="Combining datasets"):
-        dfs = []
+    dfs = []
+    for file_path in tqdm(
+        list(input_dir.rglob("*.csv")), desc="Combining datasets"
+    ):  
         try:
             df = pd.read_csv(file_path)
             dfs.append(df)
         except Exception as e:
             print(f"Error processing {file_path}: {e}")
-    full_df = pd.concat(dfs)
+    full_df = pd.concat(dfs, ignore_index=True)
     return full_df
 
 
