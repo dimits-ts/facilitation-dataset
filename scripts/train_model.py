@@ -17,9 +17,25 @@ EPOCHS = 50
 BATCH_SIZE = 64
 EARLY_STOP_THRESHOLD = 10e-5
 EARLY_STOP_PATIENCE = 3
+COMMENT_WINDOW = 1
 
 OUTPUT_DIR = Path("../results_only_head")
 LOGS_DIR = Path("../logs")
+
+
+class CustomTrainer(transformers.Trainer):
+    def evaluate(self, eval_dataset=None, **kwargs):
+        # Run normal validation eval
+        output = super().evaluate(eval_dataset=eval_dataset, **kwargs)
+
+        # Also run eval on training data
+        if self.train_dataset is not None:
+            train_metrics = super().evaluate(
+                eval_dataset=self.train_dataset, metric_key_prefix="train"
+            )
+            output.update(train_metrics)
+
+        return output
 
 
 def preprocess_dataset(df: pd.DataFrame) -> pd.DataFrame:
@@ -53,7 +69,7 @@ def df_to_train_val_test_dataset(df: pd.DataFrame, tokenizer) -> pd.DataFrame:
 
 
 def df_to_dataset(df, tokenizer):
-    x, y = build_discussion_dataset(df, context_window=2)
+    x, y = build_discussion_dataset(df, context_window=COMMENT_WINDOW)
     dataset = torch_dataset(x, y, tokenizer)
     return dataset
 
@@ -86,7 +102,9 @@ def reshape_labels(example):
     return example
 
 
-def build_discussion_dataset(df, context_window=3):
+def build_discussion_dataset(
+    df: pd.DataFrame, context_window: int
+) -> tuple[list[str], list[str]]:
     inputs = []
     outputs = []
 
@@ -176,7 +194,7 @@ def train_model(
         early_stopping_threshold=EARLY_STOP_THRESHOLD,
     )
 
-    trainer = transformers.Trainer(
+    trainer = CustomTrainer(
         model=model,
         args=training_args,
         train_dataset=train_dat,
