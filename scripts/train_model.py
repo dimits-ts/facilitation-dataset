@@ -19,27 +19,12 @@ EARLY_STOP_THRESHOLD = 10e-5
 EARLY_STOP_PATIENCE = 3
 COMMENT_WINDOW = 1
 
-OUTPUT_DIR = Path("../results_only_head")
+OUTPUT_DIR = Path("../results")
 LOGS_DIR = Path("../logs")
 
 
-class CustomTrainer(transformers.Trainer):
-    def evaluate(self, eval_dataset=None, **kwargs):
-        # Run normal validation eval
-        output = super().evaluate(eval_dataset=eval_dataset, **kwargs)
-
-        # Also run eval on training data
-        if self.train_dataset is not None:
-            train_metrics = super().evaluate(
-                eval_dataset=self.train_dataset, metric_key_prefix="train"
-            )
-            output.update(train_metrics)
-
-        return output
-
-
 def preprocess_dataset(df: pd.DataFrame) -> pd.DataFrame:
-    df = df[df.dataset.isin(["wikitactics"])]
+    df = df[df.dataset == "wikitactics"]
     df = df.reset_index()
     df.is_moderator = df.is_moderator.astype(float)
     return df
@@ -79,7 +64,7 @@ def tokenize_function(tokenizer, example):
         example["text"],
         padding="max_length",
         truncation=True,
-        max_length=MAX_LENGTH,  # For Longformer models
+        max_length=MAX_LENGTH,
     )
 
 
@@ -187,6 +172,7 @@ def train_model(
         metric_for_best_model="f1",
         greater_is_better=True,
         gradient_accumulation_steps=GRAD_ACC_STEPS,
+        report_to="tensorboard",
     )
 
     early_stopping = transformers.EarlyStoppingCallback(
@@ -194,7 +180,7 @@ def train_model(
         early_stopping_threshold=EARLY_STOP_THRESHOLD,
     )
 
-    trainer = CustomTrainer(
+    trainer = transformers.Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dat,
