@@ -13,11 +13,11 @@ MAX_LENGTH = 1024
 SEED = 42
 GRAD_ACC_STEPS = 1
 EVAL_STEPS = 150
-EPOCHS = 500
+EPOCHS = 1000
 BATCH_SIZE = 128
-EARLY_STOP_WARMUP = 1000
-EARLY_STOP_THRESHOLD = 10e-3
-EARLY_STOP_PATIENCE = 3
+EARLY_STOP_WARMUP = 5000
+EARLY_STOP_THRESHOLD = 10e-5
+EARLY_STOP_PATIENCE = 12
 COMMENT_WINDOW = 1
 
 OUTPUT_DIR = Path("../results")
@@ -254,7 +254,7 @@ def train_model(
         compute_metrics=compute_metrics,
         callbacks=[early_stopping],
     )
-    trainer.train()
+    trainer.train(resume_from_checkpoint=True)
 
     results = trainer.evaluate(eval_dataset=test_dat)
     print(results)
@@ -264,16 +264,7 @@ def train_model(
 
 
 def load_model_tokenizer():
-    if MODEL_DIR.is_dir():
-        try:
-            print("Loading local model.")
-            return _load_local_model_tokenizer()
-        except Exception as e:
-            print("Failed to load local model: ", e)
-            return _load_default_model_tokenizer()
-    else:
-        print("No local model found - loading default model.")
-        return _load_default_model_tokenizer()
+    return _load_default_model_tokenizer()
 
 
 def _load_default_model_tokenizer():
