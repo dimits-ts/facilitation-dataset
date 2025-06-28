@@ -9,18 +9,75 @@ import sklearn.metrics
 from sklearn.model_selection import train_test_split
 
 
-MAX_LENGTH = 2048
+MAX_LENGTH = 1024
 SEED = 42
 GRAD_ACC_STEPS = 1
 EVAL_STEPS = 150
-EPOCHS = 50
-BATCH_SIZE = 64
-EARLY_STOP_THRESHOLD = 10e-5
+EPOCHS = 500
+BATCH_SIZE = 128
+EARLY_STOP_WARMUP = 1000
+EARLY_STOP_THRESHOLD = 10e-3
 EARLY_STOP_PATIENCE = 3
 COMMENT_WINDOW = 1
 
 OUTPUT_DIR = Path("../results")
 LOGS_DIR = Path("../logs")
+MODEL_DIR = Path(OUTPUT_DIR / "best_model")
+
+
+class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
+    def __init__(
+        self,
+        warmup_steps=500,
+        patience=3,
+        threshold=0.0,
+        metric_name="eval_loss",
+        greater_is_better=False,
+    ):
+        self.warmup_steps = warmup_steps
+        self.patience = patience
+        self.threshold = threshold
+        self.metric_name = metric_name
+        self.greater_is_better = greater_is_better
+        self.best_metric = None
+        self.wait_count = 0
+
+    def on_evaluate(
+        self,
+        args,
+        state: transformers.TrainerState,
+        control: transformers.TrainerControl,
+        metrics,
+        **kwargs,
+    ):
+        current_step = state.global_step
+
+        if current_step < self.warmup_steps:
+            return control  # still warming up
+
+        metric_value = metrics.get(self.metric_name)
+        if metric_value is None:
+            return control  # metric not available yet
+
+        if self.best_metric is None:
+            self.best_metric = metric_value
+            return control
+
+        operator = (
+            (lambda a, b: a > b + self.threshold)
+            if self.greater_is_better
+            else (lambda a, b: a < b - self.threshold)
+        )
+
+        if operator(metric_value, self.best_metric):
+            self.best_metric = metric_value
+            self.wait_count = 0
+        else:
+            self.wait_count += 1
+            if self.wait_count >= self.patience:
+                control.should_training_stop = True
+
+        return control
 
 
 def preprocess_dataset(df: pd.DataFrame) -> pd.DataFrame:
@@ -93,26 +150,33 @@ def build_discussion_dataset(
     inputs = []
     outputs = []
 
-    # Group by conversation
+    # Index messages by their ID for quick lookup
+    id_to_row = df.set_index("message_id").to_dict("index")
+
     for conv_id, group in df.groupby("conv_id"):
-        texts = group["text"].tolist()
-        users = group["user"].tolist()
-        labels = group["is_moderator"].tolist()
+        for _, row in group.iterrows():
+            context = []
+            current_id = row["reply_to"]
+            steps = 0
 
-        for i in range(len(texts)):
-            # Get previous `context_window` comments
-            start = max(0, i - context_window)
-            context = [
-                f"<TURN> User {users[j]} posted: {texts[j]}"
-                for j in range(start, i)
-            ]
+            # Follow reply chain backwards up to context_window steps
+            while (
+                pd.notna(current_id)
+                and current_id in id_to_row
+                and steps < context_window
+            ):
+                prev_row = id_to_row[current_id]
+                context.append(
+                    f"<TURN> User {prev_row['user']} posted: {prev_row['text']}"
+                )
+                current_id = prev_row["reply_to"]
+                steps += 1
 
-            current = f"<TURN> User {users[i]} posted: {texts[i]}"
-
-            # Combine context and current
+            context = context[::-1]  # reverse to get correct order
+            current = f"<TURN> User {row['user']} posted: {row['text']}"
             input_text = " ".join(context + [current])
             inputs.append(input_text)
-            outputs.append(labels[i])
+            outputs.append(row["is_moderator"])
 
     return inputs, outputs
 
@@ -175,9 +239,11 @@ def train_model(
         report_to="tensorboard",
     )
 
-    early_stopping = transformers.EarlyStoppingCallback(
-        early_stopping_patience=EARLY_STOP_PATIENCE,
-        early_stopping_threshold=EARLY_STOP_THRESHOLD,
+    early_stopping = EarlyStoppingWithWarmupStepsCallback(
+        warmup_steps=EARLY_STOP_WARMUP,
+        patience=EARLY_STOP_PATIENCE,
+        metric_name="eval_loss",
+        greater_is_better=False,
     )
 
     trainer = transformers.Trainer(
@@ -193,12 +259,24 @@ def train_model(
     results = trainer.evaluate(eval_dataset=test_dat)
     print(results)
 
-    trainer.save_model(OUTPUT_DIR / "best_model")
-    tokenizer.save_pretrained(OUTPUT_DIR / "best_model")
+    trainer.save_model(MODEL_DIR)
+    tokenizer.save_pretrained(MODEL_DIR)
 
 
-def main():
-    set_seed(SEED)
+def load_model_tokenizer():
+    if MODEL_DIR.is_dir():
+        try:
+            print("Loading local model.")
+            return _load_local_model_tokenizer()
+        except Exception as e:
+            print("Failed to load local model: ", e)
+            return _load_default_model_tokenizer()
+    else:
+        print("No local model found - loading default model.")
+        return _load_default_model_tokenizer()
+
+
+def _load_default_model_tokenizer():
     model = transformers.LongformerForSequenceClassification.from_pretrained(
         "allenai/longformer-base-4096",
         num_labels=1,
@@ -207,6 +285,20 @@ def main():
     tokenizer = transformers.LongformerTokenizerFast.from_pretrained(
         "allenai/longformer-base-4096", max_length=MAX_LENGTH
     )
+    return model, tokenizer
+
+
+def _load_local_model_tokenizer():
+    model = transformers.LongformerForSequenceClassification.from_pretrained(
+        MODEL_DIR
+    )
+    tokenizer = transformers.LongformerTokenizerFast.from_pretrained(MODEL_DIR)
+    return model, tokenizer
+
+
+def main():
+    set_seed(SEED)
+    model, tokenizer = load_model_tokenizer()
 
     df = pd.read_csv("../pefk.csv")
     df = preprocess_dataset(df)
