@@ -1,20 +1,22 @@
 from pathlib import Path
+import collections
 
 import numpy as np
 import pandas as pd
 import torch
+import torch.nn
 import transformers
 import datasets
 import sklearn.metrics
 from sklearn.model_selection import train_test_split
 
 
-MAX_LENGTH = 1024
+MAX_LENGTH = 2048
 SEED = 42
 GRAD_ACC_STEPS = 1
 EVAL_STEPS = 150
 EPOCHS = 1000
-BATCH_SIZE = 128
+BATCH_SIZE = 64
 EARLY_STOP_WARMUP = 5000
 EARLY_STOP_THRESHOLD = 10e-5
 EARLY_STOP_PATIENCE = 12
@@ -23,6 +25,23 @@ COMMENT_WINDOW = 1
 OUTPUT_DIR = Path("../results")
 LOGS_DIR = Path("../logs")
 MODEL_DIR = Path(OUTPUT_DIR / "best_model")
+
+
+class WeightedLossTrainer(transformers.Trainer):
+    def __init__(self, pos_weight, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pos_weight = torch.tensor([pos_weight])
+
+    def compute_loss(self, model, inputs, return_outputs=False):
+        labels = inputs.get("labels").float()
+        outputs = model(**inputs)
+        logits = outputs.get("logits").view(-1)
+        labels = labels.view(-1)
+        loss_fct = torch.nn.BCEWithLogitsLoss(
+            pos_weight=self.pos_weight.to(logits.device)
+        )
+        loss = loss_fct(logits, labels)
+        return (loss, outputs) if return_outputs else loss
 
 
 class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
@@ -119,8 +138,8 @@ def df_to_dataset(df, tokenizer):
 def tokenize_function(tokenizer, example):
     return tokenizer(
         example["text"],
-        padding="max_length",
-        truncation=True,
+        padding="max_length",  # needed for batches
+        truncation="do_not_truncate",
         max_length=MAX_LENGTH,
     )
 
@@ -214,7 +233,13 @@ def compute_metrics(eval_pred):
 
 
 def train_model(
-    model, tokenizer, train_dat, val_dat, test_dat, freeze_base_model: bool
+    model,
+    tokenizer,
+    train_dat,
+    val_dat,
+    test_dat,
+    freeze_base_model: bool,
+    pos_weight: float,
 ):
     if freeze_base_model:
         for param in model.base_model.parameters():
@@ -246,7 +271,8 @@ def train_model(
         greater_is_better=False,
     )
 
-    trainer = transformers.Trainer(
+    trainer = WeightedLossTrainer(
+        pos_weight=pos_weight,
         model=model,
         args=training_args,
         train_dataset=train_dat,
@@ -254,7 +280,9 @@ def train_model(
         compute_metrics=compute_metrics,
         callbacks=[early_stopping],
     )
-    trainer.train(resume_from_checkpoint=True)
+
+    checkpoints_exist = MODEL_DIR.is_dir()
+    trainer.train(resume_from_checkpoint=checkpoints_exist)
 
     results = trainer.evaluate(eval_dataset=test_dat)
     print(results)
@@ -279,6 +307,7 @@ def _load_default_model_tokenizer():
     return model, tokenizer
 
 
+# use this for inference later on
 def _load_local_model_tokenizer():
     model = transformers.LongformerForSequenceClassification.from_pretrained(
         MODEL_DIR
@@ -293,9 +322,12 @@ def main():
 
     df = pd.read_csv("../pefk.csv")
     df = preprocess_dataset(df)
+    pos_weight = df.is_moderator.sum() / df.shape[0]
+
     train_dataset, val_dataset, test_dataset = df_to_train_val_test_dataset(
         df, tokenizer
     )
+
     train_model(
         model,
         tokenizer,
@@ -303,6 +335,7 @@ def main():
         val_dataset,
         test_dataset,
         freeze_base_model=True,
+        pos_weight=pos_weight,
     )
 
 
