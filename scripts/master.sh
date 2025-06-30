@@ -1,4 +1,4 @@
-#!/bin/bash_
+#!/bin/bash
 PEFK_PATH="../pefk.csv"
 
 if [ -f "$PEFK_PATH" ]; then
