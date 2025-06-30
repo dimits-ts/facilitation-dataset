@@ -16,11 +16,11 @@ SEED = 42
 GRAD_ACC_STEPS = 1
 EVAL_STEPS = 150
 EPOCHS = 1000
-BATCH_SIZE = 64
-EARLY_STOP_WARMUP = 5000
+BATCH_SIZE = 128
+EARLY_STOP_WARMUP = 1000
 EARLY_STOP_THRESHOLD = 10e-5
 EARLY_STOP_PATIENCE = 12
-COMMENT_WINDOW = 1
+FINETUNE_ONLY_HEAD = True
 
 OUTPUT_DIR = Path("../results")
 LOGS_DIR = Path("../logs")
@@ -32,7 +32,7 @@ class WeightedLossTrainer(transformers.Trainer):
         super().__init__(*args, **kwargs)
         self.pos_weight = torch.tensor([pos_weight])
 
-    def compute_loss(self, model, inputs, return_outputs=False):
+    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         labels = inputs.get("labels").float()
         outputs = model(**inputs)
         logits = outputs.get("logits").view(-1)
@@ -100,7 +100,9 @@ class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
 
 
 def preprocess_dataset(df: pd.DataFrame) -> pd.DataFrame:
-    df = df[df.dataset == "wikitactics"]
+    # datasets = ["wikitactics", "CeRI", "iq2", "umod"]
+    datasets = ["wikitactics"]
+    df = df[df.dataset.isin(datasets)]
     df = df.reset_index()
     df.is_moderator = df.is_moderator.astype(float)
     return df
@@ -130,7 +132,7 @@ def df_to_train_val_test_dataset(df: pd.DataFrame, tokenizer) -> pd.DataFrame:
 
 
 def df_to_dataset(df, tokenizer):
-    x, y = build_discussion_dataset(df, context_window=COMMENT_WINDOW)
+    x, y = build_discussion_dataset(df)
     dataset = torch_dataset(x, y, tokenizer)
     return dataset
 
@@ -163,39 +165,27 @@ def reshape_labels(example):
     return example
 
 
-def build_discussion_dataset(
-    df: pd.DataFrame, context_window: int
-) -> tuple[list[str], list[str]]:
+def build_discussion_dataset(df: pd.DataFrame) -> tuple[list[str], list[str]]:
     inputs = []
     outputs = []
 
-    # Index messages by their ID for quick lookup
+    # Map message_id to row for quick lookup
     id_to_row = df.set_index("message_id").to_dict("index")
 
-    for conv_id, group in df.groupby("conv_id"):
-        for _, row in group.iterrows():
-            context = []
-            current_id = row["reply_to"]
-            steps = 0
+    for _, row in df.iterrows():
+        current_comment = row["text"]
+        reply_to_id = row["reply_to"]
 
-            # Follow reply chain backwards up to context_window steps
-            while (
-                pd.notna(current_id)
-                and current_id in id_to_row
-                and steps < context_window
-            ):
-                prev_row = id_to_row[current_id]
-                context.append(
-                    f"<TURN> User {prev_row['user']} posted: {prev_row['text']}"
-                )
-                current_id = prev_row["reply_to"]
-                steps += 1
+        # Look up the comment being replied to (if any)
+        if pd.notna(reply_to_id) and reply_to_id in id_to_row:
+            previous_row = id_to_row[reply_to_id]
+            context = previous_row["text"]
+        else:
+            context = ""
 
-            context = context[::-1]  # reverse to get correct order
-            current = f"<TURN> User {row['user']} posted: {row['text']}"
-            input_text = " ".join(context + [current])
-            inputs.append(input_text)
-            outputs.append(row["is_moderator"])
+        input_text = f"<CONTEXT> {context} <COMMENT> {current_comment}"
+        inputs.append(input_text)
+        outputs.append(row["is_moderator"])
 
     return inputs, outputs
 
@@ -334,7 +324,7 @@ def main():
         train_dataset,
         val_dataset,
         test_dataset,
-        freeze_base_model=True,
+        freeze_base_model=not FINETUNE_ONLY_HEAD,
         pos_weight=pos_weight,
     )
 
