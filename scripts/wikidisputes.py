@@ -38,13 +38,9 @@ def main():
 
     df["is_moderator"] = df["conversation.user"] == df["dispute.mediator"]
     df["dataset"] = "wikidisputes"
-    df["notes"] = df.apply(
-        lambda row: {
-            "escalated": row["escalated"],
-            "toxicity": row["conversation.toxicity"],
-            "severe_toxicity": row["conversation.severe_toxicity"],
-        },
-        axis=1,
+    df["notes"] = preprocessing_util.notes_from_columns(
+        df,
+        ["escalated", "conversation.toxicity", "conversation.severe_toxicity"],
     )
 
     df = df.rename(
@@ -54,6 +50,8 @@ def main():
             "conversation.reply_to": "reply_to",
             "conversation.text": "text",
             "conversation.id": "message_id",
+            "conversation.toxicity": "toxicity",
+            "conversation.severe_toxicity": "severe_toxicity",
         }
     )
     df = preprocessing_util.std_format_df(df)

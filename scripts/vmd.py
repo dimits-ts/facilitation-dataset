@@ -24,7 +24,7 @@ def get_arg_qual(annotation_str: str) -> float:
 
 
 def assign_reply_to(df):
-    # Sort by conv_id and some timestamp proxy, here assuming row order or 
+    # Sort by conv_id and some timestamp proxy, here assuming row order or
     # message_id order
     df = df.sort_values(by=["conv_id", "message_id"]).reset_index(drop=True)
 
@@ -45,16 +45,12 @@ def main():
     ).agg({"toxicity": "mean", "arg_qual": "mean"})
     df = df.reset_index()
 
-    df = assign_reply_to(df)
+    df["reply_to"] = preprocessing_util.assign_reply_to(
+        df, conv_id_col="conv_id", message_id_col="message_id"
+    )
     df["reply_to"] = df.reply_to.astype(str)
-
-    df["notes"] = df.apply(
-        lambda row: {
-            "model": row.get("model"),
-            "toxicity": row.get("toxicity"),
-            "arg_qual": row.get("arg_qual"),
-        },
-        axis=1,
+    df["notes"] = preprocessing_util.notes_from_columns(
+        df, ["model", "toxicity", "arg_qual"]
     )
     df["dataset"] = "vmd"
     df = df.rename(columns={"message": "text"})

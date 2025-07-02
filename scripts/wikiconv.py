@@ -39,7 +39,9 @@ def process_dataset(df):
     # (found in wikiconv-20**/speakers.json). Thus, to be safe, we consider
     # them as separate, unique users
     df.speaker = df.speaker.astype(str).apply(
-        lambda x: (x if not x.endswith("xxx") else f"unknown-user-{uuid.uuid4().int}")
+        lambda x: (
+            x if not x.endswith("xxx") else f"unknown-user-{uuid.uuid4().int}"
+        )
     )
 
     tqdm.pandas(desc="Detecting language", leave=False)
@@ -67,12 +69,8 @@ def add_notes(df):
         axis=1,
     )
     df = df.drop(columns=["meta"])
-    df["notes"] = df.apply(
-        lambda row: {
-            "toxicity": row.get("meta.toxicity"),
-            "severe_toxicity": row.get("meta.sever_toxicity"),
-        },
-        axis=1,
+    df["notes"] = preprocessing_util.notes_from_columns(
+        df, ["meta.toxicity", "meta.sever_toxicity"]
     )
     return df
 
@@ -90,6 +88,8 @@ def conform_to_pefk(df):
             "reply-to": "reply_to",
             "id": "message_id",
             "speaker": "user",
+            "meta.toxicity": "toxicity",
+            "meta.sever_toxicity": "sever_toxicity",
         }
     )
 
