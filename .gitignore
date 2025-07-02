@@ -1,7 +1,7 @@
 datasets/
 downloads/
 downloads_external/
-logs/
+logs*/
 results*/
 *.csv
 

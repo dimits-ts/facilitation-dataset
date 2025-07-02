@@ -35,13 +35,16 @@ def main():
     df = pd.concat([df.reset_index(), conv_df.reset_index()], axis=1)
     df = df.drop(columns=["conversation", "index"])
     df = df[df["conversation.type"] == "original"]
+    df = df[df["conversation.text"].apply(len) > 2]
 
+    df["message_id"] = df.apply(
+        lambda row: preprocessing_util.hash_to_md5(
+            row.get("conversation.conv_id") + row.get("conversation.text")
+        ),
+        axis=1,
+    )
     df["is_moderator"] = df["conversation.user"] == df["dispute.mediator"]
     df["dataset"] = "wikidisputes"
-    df["notes"] = preprocessing_util.notes_from_columns(
-        df,
-        ["escalated", "conversation.toxicity", "conversation.severe_toxicity"],
-    )
 
     df = df.rename(
         columns={
@@ -49,10 +52,11 @@ def main():
             "conversation.user": "user",
             "conversation.reply_to": "reply_to",
             "conversation.text": "text",
-            "conversation.id": "message_id",
-            "conversation.toxicity": "toxicity",
-            "conversation.severe_toxicity": "severe_toxicity",
         }
+    )
+    df["notes"] = preprocessing_util.notes_from_columns(
+        df,
+        ["escalated", "toxicity", "severe_toxicity"],
     )
     df = preprocessing_util.std_format_df(df)
 
