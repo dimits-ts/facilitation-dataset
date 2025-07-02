@@ -14,7 +14,6 @@ OUTPUT_PATH = Path("../datasets/cmv_awry2.csv")
 
 def main():
     df = pd.read_json(INPUT_PATH, lines=True)
-    # df["conversation_id"].value_counts().describe()
 
     df["dataset"] = "cmv_awry"
     df["is_moderator"] = False
