@@ -10,13 +10,6 @@ from tasks import preprocessing_util
 INPUT_PATH = Path("../downloads/fora/corpus_resources/data.csv")
 OUTPUT_PATH = Path("../datasets/fora.csv")
 
-def notes_from_columns(df: pd.DataFrame, cols: list[str]) -> pd.Series:
-    return df.apply(
-        lambda row: {
-            col: row.get(col) for col in cols
-        },
-        axis=1,
-    )
 
 def main():
     if INPUT_PATH.exists():
@@ -30,8 +23,8 @@ def main():
             axis=1,
         )
         df["reply_to"] = preprocessing_util.assign_reply_to(df, conv_id_col="collection_id", message_id_col="message_id")
+        df["notes"] = preprocessing_util.notes_from_columns(df, ["Personal story", "Personal experience", "Express affirmation", "Specific invitation", "Provide example", "Open invitation", "Make connections", "Express appreciation", "Follow up question"])
         df["dataset"] = "fora"
-        df["notes"] = notes_from_columns(df, ["Personal story", "Personal experience", "Express affirmation", "Specific invitation", "Provide example", "Open invitation", "Make connections", "Express appreciation", "Follow up question"])
 
         df = df.rename(
             columns={

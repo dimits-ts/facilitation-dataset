@@ -85,3 +85,23 @@ def get_valid_discussion_ids(df, conv_id_col: str, user_col: str):
     user_counts = df.groupby(conv_id_col)[user_col].nunique()
     valid_discussions = user_counts[user_counts > 1]
     return valid_discussions.index.tolist()
+
+
+def assign_reply_to(df: pd.DataFrame, conv_id_col: str, message_id_col: str) -> pd.Series:
+    # Assumes previous comment is a reply
+    df2 = df.sort_values(by=[conv_id_col, message_id_col]).reset_index(drop=True)
+
+    # Create a new column with shifted message_ids within each conversation
+    reply_to = df2.groupby(conv_id_col)[message_id_col].shift(1)
+
+    return reply_to
+
+
+def notes_from_columns(df: pd.DataFrame, cols: list[str]) -> pd.Series:
+    return df.apply(
+        lambda row: {
+            col: row.get(col) for col in cols
+        },
+        axis=1,
+    )
+    
