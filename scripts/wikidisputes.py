@@ -35,23 +35,19 @@ def main():
     df = pd.concat([df.reset_index(), conv_df.reset_index()], axis=1)
     df = df.drop(columns=["conversation", "index"])
     df = df[df["conversation.type"] == "original"]
-    df = df[df["conversation.text"].apply(len) > 2]
+    df = df[df["conversation.text"].apply(len) > 2]    
 
-    df["message_id"] = df.apply(
-        lambda row: preprocessing_util.hash_to_md5(
-            row.get("conversation.conv_id") + row.get("conversation.text")
-        ),
-        axis=1,
-    )
     df["is_moderator"] = df["conversation.user"] == df["dispute.mediator"]
     df["dataset"] = "wikidisputes"
 
+    # duplicate values in message_id
     df = df.rename(
         columns={
             "conversation.conv_id": "conv_id",
             "conversation.user": "user",
             "conversation.reply_to": "reply_to",
             "conversation.text": "text",
+            "conversation.id": "message_id",
         }
     )
     df["notes"] = preprocessing_util.notes_from_columns(

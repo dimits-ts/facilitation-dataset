@@ -20,12 +20,6 @@ def json_to_df(json_dataset: dict) -> pd.DataFrame:
     return pd.concat(discussion_dfs, ignore_index=True)
 
 
-def assign_reply_to(group):
-    group = group.sort_index()  # Preserve original order within conversation
-    group["reply_to"] = [None] + group["message_id"].iloc[:-1].tolist()
-    return group
-
-
 def main():
     with INPUT_PATH.open("r") as fin:
         contents = json.load(fin)
@@ -36,17 +30,21 @@ def main():
     df.paragraphs = df.paragraphs.str.replace("...", "")
 
     df["is_moderator"] = df.speakertype.apply(lambda x: x in ["mod", "host"])
+    df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
+    df.speaker_turn = df.speaker_turn.astype(str)
     df["message_id"] = df.apply(
         lambda row: preprocessing_util.hash_to_md5(
-            row.get("paragraphs") + row.get("conv_id")
+            row.get("paragraphs")
+            + row.get("conv_id")
+            + row.get("speaker_turn")
         ),
         axis=1,
     )
     df["dataset"] = "iq2"
     df["notes"] = None
-    df["reply_to"] = None  # Initialize the column
-    # this is deprecated, but idk how to cleanly keep the conv_id column
-    df = df.groupby("conv_id", group_keys=False).apply(assign_reply_to)
+    df["reply_to"] = preprocessing_util.assign_reply_to(
+        df, conv_id_col="conv_id", message_id_col="message_id"
+    )
 
     df = df.rename(
         columns={

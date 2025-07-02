@@ -105,7 +105,13 @@ def main():
         ],
     )
 
-    df["message_id"] = df.text.apply(preprocessing_util.hash_to_md5)
+    df["message_id"] = df.apply(
+            lambda row: preprocessing_util.hash_to_md5(
+                row.get("id")
+                + row.get("text")
+            ),
+            axis=1,
+        )
     # if comment is reply, is 70% moderation (aggregated via labels) and
     # if annotators are more than 50% confident
     df["is_moderator"] = (

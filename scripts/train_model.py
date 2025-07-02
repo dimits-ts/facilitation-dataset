@@ -1,5 +1,4 @@
 from pathlib import Path
-import collections
 
 import numpy as np
 import pandas as pd
@@ -13,13 +12,13 @@ from sklearn.model_selection import train_test_split
 
 MAX_LENGTH = 2048
 SEED = 42
-GRAD_ACC_STEPS = 1
+GRAD_ACC_STEPS = 2
 EVAL_STEPS = 150
 EPOCHS = 1000
-BATCH_SIZE = 128
-EARLY_STOP_WARMUP = 1000
+BATCH_SIZE = 32
+EARLY_STOP_WARMUP = 2000
 EARLY_STOP_THRESHOLD = 10e-5
-EARLY_STOP_PATIENCE = 12
+EARLY_STOP_PATIENCE = 20
 FINETUNE_ONLY_HEAD = True
 
 OUTPUT_DIR = Path("../results")
@@ -101,7 +100,7 @@ class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
 
 def preprocess_dataset(df: pd.DataFrame) -> pd.DataFrame:
     # datasets = ["wikitactics", "CeRI", "iq2", "umod"]
-    datasets = ["wikitactics"]
+    datasets = ["wikitactics", "ceri", "umod", "fora", "iq2"]
     df = df[df.dataset.isin(datasets)]
     df = df.reset_index()
     df.is_moderator = df.is_moderator.astype(float)
