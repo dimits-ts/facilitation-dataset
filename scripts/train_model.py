@@ -10,19 +10,19 @@ import sklearn.metrics
 from sklearn.model_selection import train_test_split
 
 
-MAX_LENGTH = 2048
+MAX_LENGTH = 4096
 SEED = 42
-GRAD_ACC_STEPS = 2
+GRAD_ACC_STEPS = 1
 EVAL_STEPS = 150
-EPOCHS = 1000
+EPOCHS = 100
 BATCH_SIZE = 32
 EARLY_STOP_WARMUP = 2000
 EARLY_STOP_THRESHOLD = 10e-5
 EARLY_STOP_PATIENCE = 20
 FINETUNE_ONLY_HEAD = True
 
-OUTPUT_DIR = Path("../results")
-LOGS_DIR = Path("../logs")
+OUTPUT_DIR = Path("../results_all")
+LOGS_DIR = Path("../logs/training/all")
 MODEL_DIR = Path(OUTPUT_DIR / "best_model")
 
 
@@ -100,7 +100,7 @@ class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
 
 def preprocess_dataset(df: pd.DataFrame) -> pd.DataFrame:
     # datasets = ["wikitactics", "CeRI", "iq2", "umod"]
-    datasets = ["wikitactics", "ceri", "umod", "fora", "iq2"]
+    datasets = ["wikitactics", "ceri", "umod", "fora", "iq2", "whow"]
     df = df[df.dataset.isin(datasets)]
     df = df.reset_index()
     df.is_moderator = df.is_moderator.astype(float)
@@ -139,8 +139,8 @@ def df_to_dataset(df, tokenizer):
 def tokenize_function(tokenizer, example):
     return tokenizer(
         example["text"],
-        padding="max_length",  # needed for batches
-        truncation="do_not_truncate",
+        padding="longest",  # needed for batches
+        truncation=True,
         max_length=MAX_LENGTH,
     )
 
@@ -260,6 +260,10 @@ def train_model(
         greater_is_better=False,
     )
 
+    data_collator = transformers.DataCollatorWithPadding(
+        tokenizer, padding=True
+    )
+
     trainer = WeightedLossTrainer(
         pos_weight=pos_weight,
         model=model,
@@ -268,6 +272,7 @@ def train_model(
         eval_dataset=val_dat,
         compute_metrics=compute_metrics,
         callbacks=[early_stopping],
+        **{"data_collator": data_collator},  # <- ADD THIS
     )
 
     checkpoints_exist = MODEL_DIR.is_dir()
@@ -323,7 +328,7 @@ def main():
         train_dataset,
         val_dataset,
         test_dataset,
-        freeze_base_model=not FINETUNE_ONLY_HEAD,
+        freeze_base_model=FINETUNE_ONLY_HEAD,
         pos_weight=pos_weight,
     )
 
