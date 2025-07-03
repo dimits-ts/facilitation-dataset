@@ -88,18 +88,14 @@ def get_valid_discussion_ids(df, conv_id_col: str, user_col: str):
 
 
 def assign_reply_to(
-    df: pd.DataFrame, conv_id_col: str, message_id_col: str
+    df: pd.DataFrame, conv_id_col: str, message_id_col: str, order_col: str
 ) -> pd.Series:
-    # Sort by conversation and message order
-    df2 = df.sort_values(by=[conv_id_col, message_id_col]).reset_index()
-
-    # Compute reply-to (previous message) within each conversation
-    df2["reply_to"] = df2.groupby(conv_id_col)[message_id_col].shift(1)
-
-    # Re-align to original DataFrame's order using the preserved index
-    reply_to_aligned = df2.set_index("index").sort_index()["reply_to"]
-
-    return reply_to_aligned
+    df_sorted = df.sort_values([conv_id_col, order_col])
+    # shift comment id by 1
+    reply_to = df_sorted.groupby(conv_id_col)[message_id_col].shift(1)
+    # The result is aligned with df_sorted, we must reindex to original df order
+    reply_to = reply_to.reindex(df.index)
+    return reply_to
 
 
 def notes_from_columns(df: pd.DataFrame, cols: list[str]) -> pd.Series:

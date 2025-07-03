@@ -15,17 +15,16 @@ def main():
         df = pd.read_csv(INPUT_PATH)
         df.words = df.words.astype(str)
         df.conversation_id = df.conversation_id.astype(str)
-        df.SpeakerTurn = df.SpeakerTurn.astype(str)
+        df.SpeakerTurn = df.SpeakerTurn.astype(int)
         df["message_id"] = df.apply(
-            lambda row: preprocessing_util.hash_to_md5(
-                row.get("conversation_id")
-                + row.get("words")
-                + row.get("SpeakerTurn")
-            ),
+            lambda row: f"fora-{row.get("conversation_id")}-{row.get("SpeakerTurn")}",
             axis=1,
         )
         df["reply_to"] = preprocessing_util.assign_reply_to(
-            df, conv_id_col="conversation_id", message_id_col="message_id"
+            df,
+            conv_id_col="conversation_id",
+            message_id_col="message_id",
+            order_col="SpeakerTurn",
         )
         df["notes"] = preprocessing_util.notes_from_columns(
             df,
