@@ -18,14 +18,14 @@ def filter_discussions_by_comment_count(
 
     Parameters:
     - df (pd.DataFrame): The dataframe containing the discussion data.
-    - min_comments (int): Minimum number of comments required to keep a 
+    - min_comments (int): Minimum number of comments required to keep a
     discussion.
-    - max_comments (int or None): Maximum number of comments allowed to keep a 
+    - max_comments (int or None): Maximum number of comments allowed to keep a
     discussion.
     - discussion_col (str): Name of the column identifying discussions.
 
     Returns:
-    - pd.DataFrame: Filtered dataframe containing only discussions within the 
+    - pd.DataFrame: Filtered dataframe containing only discussions within the
     specified range.
     """
     discussion_counts = df[discussion_col].value_counts()
@@ -87,21 +87,23 @@ def get_valid_discussion_ids(df, conv_id_col: str, user_col: str):
     return valid_discussions.index.tolist()
 
 
-def assign_reply_to(df: pd.DataFrame, conv_id_col: str, message_id_col: str) -> pd.Series:
-    # Assumes previous comment is a reply
-    df2 = df.sort_values(by=[conv_id_col, message_id_col]).reset_index(drop=True)
+def assign_reply_to(
+    df: pd.DataFrame, conv_id_col: str, message_id_col: str
+) -> pd.Series:
+    # Sort by conversation and message order
+    df2 = df.sort_values(by=[conv_id_col, message_id_col]).reset_index()
 
-    # Create a new column with shifted message_ids within each conversation
-    reply_to = df2.groupby(conv_id_col)[message_id_col].shift(1)
+    # Compute reply-to (previous message) within each conversation
+    df2["reply_to"] = df2.groupby(conv_id_col)[message_id_col].shift(1)
 
-    return reply_to
+    # Re-align to original DataFrame's order using the preserved index
+    reply_to_aligned = df2.set_index("index").sort_index()["reply_to"]
+
+    return reply_to_aligned
 
 
 def notes_from_columns(df: pd.DataFrame, cols: list[str]) -> pd.Series:
     return df.apply(
-        lambda row: {
-            col: row.get(col) for col in cols
-        },
+        lambda row: {col: row.get(col) for col in cols},
         axis=1,
     )
-    

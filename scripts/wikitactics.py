@@ -68,9 +68,9 @@ def main():
         ),
         axis=1,
     )
-    df["reply_to"] = None  # Initialize the column
-    # this is deprecated, but idk how to cleanly keep the conv_id column
-    df = df.groupby("conv_id", group_keys=False).apply(assign_reply_to)
+    df["reply_to"] = preprocessing_util.assign_reply_to(
+        df, conv_id_col="conv_id", message_id_col="message_id"
+    )
     df["notes"] = None
     df = df.rename(columns={"username": "user"})
     df = preprocessing_util.std_format_df(df)
