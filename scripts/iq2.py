@@ -26,24 +26,23 @@ def main():
 
     df = json_to_df(contents)
     df = df.explode("paragraphs")
+    df = df.reset_index()
     df.paragraphs = df.paragraphs.str.replace("uh,", "")
     df.paragraphs = df.paragraphs.str.replace("...", "")
 
     df["is_moderator"] = df.speakertype.apply(lambda x: x in ["mod", "host"])
     df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
-    df.speaker_turn = df.speaker_turn.astype(str)
     df["message_id"] = df.apply(
-        lambda row: preprocessing_util.hash_to_md5(
-            row.get("paragraphs")
-            + row.get("conv_id")
-            + row.get("speaker_turn")
-        ),
+        lambda row: f"iq2-{row.get("conv_id")}-{row.get("speaker_turn")}",
         axis=1,
     )
     df["dataset"] = "iq2"
     df["notes"] = None
     df["reply_to"] = preprocessing_util.assign_reply_to(
-        df, conv_id_col="conv_id", message_id_col="message_id"
+        df,
+        conv_id_col="conv_id",
+        message_id_col="message_id",
+        order_col="speaker_turn",
     )
 
     df = df.rename(

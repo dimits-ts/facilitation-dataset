@@ -99,11 +99,12 @@ class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
 
 
 def preprocess_dataset(df: pd.DataFrame) -> pd.DataFrame:
-    # datasets = ["wikitactics", "CeRI", "iq2", "umod"]
     datasets = ["wikitactics", "ceri", "umod", "fora", "iq2", "whow"]
     df = df[df.dataset.isin(datasets)]
     df = df.reset_index()
     df.is_moderator = df.is_moderator.astype(float)
+    df.text = df.text.astype(str)
+    df = df[df.text.apply(len) > 10]
     return df
 
 
@@ -214,7 +215,7 @@ def train_validate_test_split(
 
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
-    preds = logits.argmax(axis=1)  # numpy operation
+    preds = (logits > 0).astype(int)
     return {
         "accuracy": sklearn.metrics.accuracy_score(labels, preds),
         "f1": sklearn.metrics.f1_score(labels, preds),
@@ -310,13 +311,91 @@ def _load_local_model_tokenizer():
     return model, tokenizer
 
 
+def sanity_check_data(df, tokenizer, seed=42):
+    print("=== Raw Data Labels Check ===")
+    unique_labels = set(df["is_moderator"])
+    print(f"Unique labels in raw df: {unique_labels}")
+    assert unique_labels.issubset(
+        {0.0, 1.0}
+    ), "Raw labels contain unexpected values!"
+
+    # Use your existing train/val/test split function
+    train_df, val_df, test_df = train_validate_test_split(
+        df,
+        stratify_col="is_moderator",
+        train_percent=0.75,
+        validate_percent=0.15,
+        seed=seed,
+    )
+
+    print("\n=== Label Distribution in Splits ===")
+    print(
+        "Train label distribution:\n",
+        train_df["is_moderator"].value_counts(normalize=True),
+    )
+    print(
+        "Val label distribution:\n",
+        val_df["is_moderator"].value_counts(normalize=True),
+    )
+    print(
+        "Test label distribution:\n",
+        test_df["is_moderator"].value_counts(normalize=True),
+    )
+
+    # Use your existing function to build inputs and outputs for training data
+    train_inputs, train_labels = build_discussion_dataset(train_df)
+
+    print("\n=== Sample Raw Inputs and Labels ===")
+    for i in range(min(10, len(train_inputs))):
+        print(f"Input {i}: {train_inputs[i]}")
+        print(f"Label {i}: {train_labels[i]}")
+
+    # Convert to dataset and tokenize using your existing functions
+    import datasets
+
+    dataset = datasets.Dataset.from_dict(
+        {"text": train_inputs, "labels": train_labels}
+    )
+
+    # Tokenize
+    dataset = dataset.map(
+        lambda x: tokenize_function(tokenizer, x), batched=True
+    )
+    dataset.set_format(
+        type="torch", columns=["input_ids", "attention_mask", "labels"]
+    )
+
+    # Apply reshape_labels as in your pipeline
+    dataset = dataset.map(reshape_labels)
+
+    print("\n=== Sample Tokenized Dataset Entries ===")
+    for i in range(min(10, len(dataset))):
+        example = dataset[i]
+        print(
+            f"Example {i} labels shape: {example['labels'].shape}, value: {example['labels']}"
+        )
+        print(f"Example {i} input_ids length: {len(example['input_ids'])}")
+        print(f"Example {i} sample tokens: {example['input_ids'][:10]}")
+
+    # Check labels after tokenization and reshaping
+    labels = [example["labels"].item() for example in dataset]
+    unique_after = set(labels)
+    print(f"\nUnique labels after tokenization and reshape: {unique_after}")
+    assert unique_after.issubset(
+        {0.0, 1.0}
+    ), "Labels corrupted after tokenization and reshape!"
+
+    print("\nSanity check PASSED.")
+
+
 def main():
     set_seed(SEED)
     model, tokenizer = load_model_tokenizer()
 
     df = pd.read_csv("../pefk.csv")
     df = preprocess_dataset(df)
-    pos_weight = df.is_moderator.sum() / df.shape[0]
+    sanity_check_data(df, tokenizer)
+    pos_weight = (df.is_moderator == 0).sum() / (df.is_moderator == 1).sum()
 
     train_dataset, val_dataset, test_dataset = df_to_train_val_test_dataset(
         df, tokenizer

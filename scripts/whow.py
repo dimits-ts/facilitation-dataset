@@ -47,14 +47,19 @@ def main():
     df["is_moderator"] = df.role == "mod"
     df["user"] = df.speaker.apply(preprocessing_util.hash_to_md5)
 
-    # sort by turn order and then run reply_to
-    df.message_id = df.message_id.astype(int)
+    df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
+    df["message_id"] = df.apply(
+        lambda row: f"whow-{row.get("conv_id")}-{row.get("speaker_turn")}",
+        axis=1,
+    )
     df = df.sort_values(by="message_id")
     df["reply_to"] = preprocessing_util.assign_reply_to(
-        df, conv_id_col="conv_id", message_id_col="message_id"
+        df,
+        conv_id_col="conv_id",
+        message_id_col="message_id",
+        order_col="speaker_turn",
     )
 
-    df.message_id = "whow-" + df.message_id.astype(str)
     df["dataset"] = "whow"
     df["notes"] = None
 
