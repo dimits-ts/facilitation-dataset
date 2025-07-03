@@ -13,7 +13,7 @@ from sklearn.model_selection import train_test_split
 MAX_LENGTH = 4096
 SEED = 42
 GRAD_ACC_STEPS = 1
-EVAL_STEPS = 150
+EVAL_STEPS = 400
 EPOCHS = 100
 BATCH_SIZE = 32
 EARLY_STOP_WARMUP = 2000
@@ -215,7 +215,7 @@ def train_validate_test_split(
 
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
-    preds = (logits > 0).astype(int)
+    preds = (logits.reshape(-1) > 0).astype(int)
     return {
         "accuracy": sklearn.metrics.accuracy_score(labels, preds),
         "f1": sklearn.metrics.f1_score(labels, preds),
