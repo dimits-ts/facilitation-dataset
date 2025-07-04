@@ -1,4 +1,5 @@
 from pathlib import Path
+import argparse
 
 import numpy as np
 import pandas as pd
@@ -98,9 +99,10 @@ class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
         return control
 
 
-def preprocess_dataset(df: pd.DataFrame) -> pd.DataFrame:
-    datasets = ["wikitactics", "ceri", "umod", "fora", "iq2", "whow"]
-    df = df[df.dataset.isin(datasets)]
+def preprocess_dataset(
+    df: pd.DataFrame, dataset_ls: list[str]
+) -> pd.DataFrame:
+    df = df[df.dataset.isin(dataset_ls)]
     df = df.reset_index()
     df.is_moderator = df.is_moderator.astype(float)
     df.text = df.text.astype(str)
@@ -359,7 +361,8 @@ def sanity_check_data(df, tokenizer, seed=42):
     for i in range(min(10, len(dataset))):
         example = dataset[i]
         print(
-            f"Example {i} labels shape: {example['labels'].shape}, value: {example['labels']}"
+            f"Example {i} labels shape: {example['labels'].shape}, "
+            f"value: {example['labels']}"
         )
         print(f"Example {i} input_ids length: {len(example['input_ids'])}")
         print(f"Example {i} sample tokens: {example['input_ids'][:10]}")
@@ -375,12 +378,12 @@ def sanity_check_data(df, tokenizer, seed=42):
     print("\nSanity check PASSED.")
 
 
-def main():
+def main(dataset_ls: list[str]):
     set_seed(SEED)
     model, tokenizer = load_model_tokenizer()
 
     df = pd.read_csv("../pefk.csv")
-    df = preprocess_dataset(df)
+    df = preprocess_dataset(df, dataset_ls)
     sanity_check_data(df, tokenizer)
     pos_weight = (df.is_moderator == 0).sum() / (df.is_moderator == 1).sum()
 
@@ -400,4 +403,12 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description='Dataset selection')
+    parser.add_argument(
+        "--datasets",
+        type=str,
+        required=True,
+        help="Comma-separated list of datasets",
+    )
+    args = parser.parse_args()
+    main(dataset_ls=args.dataset.split(','))

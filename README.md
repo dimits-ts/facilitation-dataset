@@ -48,7 +48,7 @@ bash master.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 wikidispute
 
 ## Important Notes
 
-- The *Fora* dataset is NOT publically available. Under an agreement with the MIT CCC we do not include this dataset by default in this repository, although the code to process it is present. 
+- The *Fora* dataset is NOT publicly available. Under an agreement with the MIT CCC we do not include this dataset by default in this repository, although the code to process it is present. 
     - If you have access to *Fora*, place the provided `.zip` file in the `project_root/downloads_external` directory.
     - You may request access to Fora following the researchers' [provided instructions](https://github.com/schropes/fora-corpus/blob/main/README.md)
 
@@ -76,7 +76,7 @@ bash master.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 wikidispute
     - Additionally, we follow the [instructions of the original researchers](https://github.com/conversationai/wikidetox/blob/main/wikiconv/README.md), and select only discussions which have at least two comments by different users
         - Wikipedia (thankfully) does not track users who log in with only an IP address (in the original dataset, their user_id is always set to 0 and their username is of the form 211.111.111.xxx). We consider each such username to be a separate user.
         - Due to the size of the dataset, we have to partially load it during preprocessing. Thus, there is a small chance every 100,000 records that a discussion is marked as a false negative and a part of it gets discarded.
-    - We only include English comments in the final dataset. We use a small, efficient library (`py3langid`) for language recongition, due to the large size of Wikiconv. We include every comment that is English with a confidence score of more than 75%. This can be trivially tuned in the `scripts/wikiconv.py` file. Non-english comments are discarded *before* selecting valid discussions (see point above).
+    - We only include English comments in the final dataset. We use a small, efficient library (`py3langid`) for language recognition, due to the large size of Wikiconv. We include every comment that is English with a confidence score of more than 75%. This can be trivially tuned in the `scripts/wikiconv.py` file. Non-english comments are discarded *before* selecting valid discussions (see point above).
 - In WikiDisputes, we infer facilitative actions by whether the comment belongs in any of the following categories:
     - Asking questions
     - Coordinating edits
