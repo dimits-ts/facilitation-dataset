@@ -35,7 +35,7 @@ def main():
     df = pd.concat([df.reset_index(), conv_df.reset_index()], axis=1)
     df = df.drop(columns=["conversation", "index"])
     df = df[df["conversation.type"] == "original"]
-    df = df[df["conversation.text"].apply(len) > 2]    
+    df = df[df["conversation.text"].apply(len) > 2]
 
     df["is_moderator"] = df["conversation.user"] == df["dispute.mediator"]
     df["dataset"] = "wikidisputes"

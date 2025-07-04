@@ -40,12 +40,6 @@ def is_moderator(
     return False
 
 
-def assign_reply_to(group):
-    group = group.sort_index()  # Preserve original order within conversation
-    group["reply_to"] = [None] + group["message_id"].iloc[:-1].tolist()
-    return group
-
-
 def main():
     df = pd.read_json(INPUT_PATH)
     df = df.explode(column="utterances")
@@ -60,17 +54,21 @@ def main():
         ),
         axis=1,
     )
-    df["dataset"] = "wikitactics"
+
+    df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
     # make sure message_id is unique across discussions
     df["message_id"] = df.apply(
-        lambda row: util.preprocessing.hash_to_md5(
-            row.get("text") + row.get("conv_id")
-        ),
+        lambda row: f"wikitactics-{row.get("conv_id")}-"
+        f"{row.get("speaker_turn")}",
         axis=1,
     )
     df["reply_to"] = util.preprocessing.assign_reply_to(
-        df, conv_id_col="conv_id", message_id_col="message_id"
+        df,
+        conv_id_col="conv_id",
+        message_id_col="message_id",
+        order_col="speaker_turn",
     )
+    df["dataset"] = "wikitactics"
     df["notes"] = None
     df = df.rename(columns={"username": "user"})
     df = util.preprocessing.std_format_df(df)

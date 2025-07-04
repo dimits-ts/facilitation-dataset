@@ -45,10 +45,14 @@ def main():
     ).agg({"toxicity": "mean", "arg_qual": "mean"})
     df = df.reset_index()
 
+    df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
     df["reply_to"] = util.preprocessing.assign_reply_to(
-        df, conv_id_col="conv_id", message_id_col="message_id"
+        df,
+        conv_id_col="conv_id",
+        message_id_col="message_id",
+        order_col="speaker_turn",
     )
-    df["reply_to"] = df.reply_to.astype(str)
+
     df["notes"] = util.preprocessing.notes_from_columns(
         df, ["model", "toxicity", "arg_qual"]
     )
