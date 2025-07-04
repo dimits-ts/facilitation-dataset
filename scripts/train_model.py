@@ -19,10 +19,6 @@ EARLY_STOP_THRESHOLD = 10e-5
 EARLY_STOP_PATIENCE = 20
 FINETUNE_ONLY_HEAD = True
 
-OUTPUT_DIR = Path("../results_all")
-LOGS_DIR = Path("../logs/training/all")
-MODEL_DIR = Path(OUTPUT_DIR / "best_model")
-
 
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
@@ -41,13 +37,16 @@ def train_model(
     test_dat,
     freeze_base_model: bool,
     pos_weight: float,
+    output_dir: Path,
+    logs_dir: Path,
 ):
+    finetuned_model_dir = output_dir / "best_model"
     if freeze_base_model:
         for param in model.base_model.parameters():
             param.requires_grad = False
 
     training_args = transformers.TrainingArguments(
-        output_dir=OUTPUT_DIR,
+        output_dir=output_dir,
         per_device_train_batch_size=BATCH_SIZE,
         per_device_eval_batch_size=BATCH_SIZE,
         num_train_epochs=EPOCHS,
@@ -56,7 +55,7 @@ def train_model(
         save_strategy="steps",
         save_steps=int(EVAL_STEPS / GRAD_ACC_STEPS),
         logging_strategy="steps",
-        logging_dir=LOGS_DIR,
+        logging_dir=logs_dir,
         logging_steps=int(EVAL_STEPS / GRAD_ACC_STEPS),
         load_best_model_at_end=True,
         metric_for_best_model="f1",
@@ -87,14 +86,14 @@ def train_model(
         **{"data_collator": data_collator}
     )
 
-    checkpoints_exist = MODEL_DIR.is_dir()
+    checkpoints_exist = finetuned_model_dir.is_dir()
     trainer.train(resume_from_checkpoint=checkpoints_exist)
 
     results = trainer.evaluate(eval_dataset=test_dat)
     print(results)
 
-    trainer.save_model(MODEL_DIR)
-    tokenizer.save_pretrained(MODEL_DIR)
+    trainer.save_model(finetuned_model_dir)
+    tokenizer.save_pretrained(finetuned_model_dir)
 
 
 def load_model_tokenizer():
@@ -109,7 +108,12 @@ def load_model_tokenizer():
     return model, tokenizer
 
 
-def main(dataset_ls: list[str]) -> None:
+def main(args) -> None:
+    dataset_ls = args.dataset.split(",")
+    logs_dir = Path(args.logs_dir)
+    output_dir = Path(args.output_dir)
+
+    print("Starting training with datasets: ", dataset_ls)
     util.classification.set_seed(SEED)
     model, tokenizer = load_model_tokenizer()
 
@@ -131,16 +135,27 @@ def main(dataset_ls: list[str]) -> None:
         test_dataset,
         freeze_base_model=FINETUNE_ONLY_HEAD,
         pos_weight=pos_weight,
+        output_dir=output_dir,
+        logs_dir=logs_dir,
     )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dataset selection")
     parser.add_argument(
-        "--datasets",
+        "dataset", type=str, help="Comma-separated list of datasets"
+    )
+    parser.add_argument(
+        "--output_dir",
         type=str,
+        help="Output directory for results",
         required=True,
-        help="Comma-separated list of datasets",
+    )
+    parser.add_argument(
+        "--logs_dir",
+        type=str,
+        help="Directory for training logs",
+        required=True,
     )
     args = parser.parse_args()
-    main(dataset_ls=args.dataset.split(","))
+    main(args)
