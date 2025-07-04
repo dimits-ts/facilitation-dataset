@@ -287,10 +287,6 @@ def train_model(
 
 
 def load_model_tokenizer():
-    return _load_default_model_tokenizer()
-
-
-def _load_default_model_tokenizer():
     model = transformers.LongformerForSequenceClassification.from_pretrained(
         "allenai/longformer-base-4096",
         num_labels=1,
@@ -299,15 +295,6 @@ def _load_default_model_tokenizer():
     tokenizer = transformers.LongformerTokenizerFast.from_pretrained(
         "allenai/longformer-base-4096", max_length=MAX_LENGTH
     )
-    return model, tokenizer
-
-
-# use this for inference later on
-def _load_local_model_tokenizer():
-    model = transformers.LongformerForSequenceClassification.from_pretrained(
-        MODEL_DIR
-    )
-    tokenizer = transformers.LongformerTokenizerFast.from_pretrained(MODEL_DIR)
     return model, tokenizer
 
 
