@@ -5,7 +5,7 @@ import pandas as pd
 import transformers
 import sklearn.metrics
 
-from tasks import classification_util
+import util.classification
 
 
 MAX_LENGTH = 4096
@@ -65,7 +65,7 @@ def train_model(
         report_to="tensorboard",
     )
 
-    early_stopping = classification_util.EarlyStoppingWithWarmupStepsCallback(
+    early_stopping = util.classification.EarlyStoppingWithWarmupStepsCallback(
         warmup_steps=EARLY_STOP_WARMUP,
         patience=EARLY_STOP_PATIENCE,
         metric_name="eval_loss",
@@ -76,7 +76,7 @@ def train_model(
         tokenizer, padding=True
     )
 
-    trainer = classification_util.WeightedLossTrainer(
+    trainer = util.classification.WeightedLossTrainer(
         pos_weight=pos_weight,
         model=model,
         args=training_args,
@@ -110,15 +110,15 @@ def load_model_tokenizer():
 
 
 def main(dataset_ls: list[str]) -> None:
-    classification_util.set_seed(SEED)
+    util.classification.set_seed(SEED)
     model, tokenizer = load_model_tokenizer()
 
     df = pd.read_csv("../pefk.csv")
-    df = classification_util.preprocess_dataset(df, dataset_ls)
+    df = util.classification.preprocess_dataset(df, dataset_ls)
     pos_weight = (df.is_moderator == 0).sum() / (df.is_moderator == 1).sum()
 
     train_dataset, val_dataset, test_dataset = (
-        classification_util.df_to_train_val_test_dataset(
+        util.classification.df_to_train_val_test_dataset(
             df, tokenizer, seed=SEED, max_length=MAX_LENGTH
         )
     )

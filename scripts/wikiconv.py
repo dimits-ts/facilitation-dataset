@@ -5,7 +5,7 @@ import pandas as pd
 import py3langid as langid
 from tqdm.auto import tqdm
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_DIR = Path("../downloads/wikiconv")
@@ -19,7 +19,7 @@ def main():
     for file_path in tqdm(jsonl_files, desc="Yearly datasets"):
         for chunk in tqdm(
             pd.read_json(file_path, lines=True, chunksize=CHUNK_SIZE),
-            total=preprocessing_util.get_num_chunks(file_path, CHUNK_SIZE),
+            total=util.preprocessing.get_num_chunks(file_path, CHUNK_SIZE),
             leave=False,
             desc="Dataset chunks",
         ):
@@ -48,7 +48,7 @@ def process_dataset(df):
     df = df[df.text.astype(str).progress_apply(is_english)]
 
     # Filter out conversations with only one user commenting
-    valid_discussion_ids = preprocessing_util.get_valid_discussion_ids(
+    valid_discussion_ids = util.preprocessing.get_valid_discussion_ids(
         df, conv_id_col="conversation_id", user_col="speaker"
     )
     df = df[df.conversation_id.isin(valid_discussion_ids)]
@@ -69,7 +69,7 @@ def add_notes(df):
         axis=1,
     )
     df = df.drop(columns=["meta"])
-    df["notes"] = preprocessing_util.notes_from_columns(
+    df["notes"] = util.preprocessing.notes_from_columns(
         df, ["meta.toxicity", "meta.sever_toxicity"]
     )
     return df
@@ -93,7 +93,7 @@ def conform_to_pefk(df):
         }
     )
 
-    df = preprocessing_util.std_format_df(df)
+    df = util.preprocessing.std_format_df(df)
     return df
 
 

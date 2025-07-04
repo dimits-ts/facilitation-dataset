@@ -3,7 +3,7 @@ import json
 
 import pandas as pd
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_PATH = Path("../downloads/iq2/iq2_data_release.json")
@@ -38,7 +38,7 @@ def main():
     )
     df["dataset"] = "iq2"
     df["notes"] = None
-    df["reply_to"] = preprocessing_util.assign_reply_to(
+    df["reply_to"] = util.preprocessing.assign_reply_to(
         df,
         conv_id_col="conv_id",
         message_id_col="message_id",
@@ -51,7 +51,7 @@ def main():
             "speaker": "user",
         }
     )
-    df = preprocessing_util.std_format_df(df)
+    df = util.preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_DIR = Path("../downloads/whow/data")
@@ -45,7 +45,7 @@ def main():
     df = df.astype(str)
     df = merge_back_to_back_comments(df)
     df["is_moderator"] = df.role == "mod"
-    df["user"] = df.speaker.apply(preprocessing_util.hash_to_md5)
+    df["user"] = df.speaker.apply(util.preprocessing.hash_to_md5)
 
     df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
     df["message_id"] = df.apply(
@@ -53,7 +53,7 @@ def main():
         axis=1,
     )
     df = df.sort_values(by="message_id")
-    df["reply_to"] = preprocessing_util.assign_reply_to(
+    df["reply_to"] = util.preprocessing.assign_reply_to(
         df,
         conv_id_col="conv_id",
         message_id_col="message_id",
@@ -63,7 +63,7 @@ def main():
     df["dataset"] = "whow"
     df["notes"] = None
 
-    df = preprocessing_util.std_format_df(df)
+    df = util.preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

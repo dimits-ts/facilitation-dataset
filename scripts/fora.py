@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_PATH = Path("../downloads/fora/corpus_resources/data.csv")
@@ -20,13 +20,13 @@ def main():
             lambda row: f"fora-{row.get("conversation_id")}-{row.get("SpeakerTurn")}",
             axis=1,
         )
-        df["reply_to"] = preprocessing_util.assign_reply_to(
+        df["reply_to"] = util.preprocessing.assign_reply_to(
             df,
             conv_id_col="conversation_id",
             message_id_col="message_id",
             order_col="SpeakerTurn",
         )
-        df["notes"] = preprocessing_util.notes_from_columns(
+        df["notes"] = util.preprocessing.notes_from_columns(
             df,
             [
                 "Personal story",
@@ -50,7 +50,7 @@ def main():
                 "is_fac": "is_moderator",
             }
         )
-        df = preprocessing_util.std_format_df(df)
+        df = util.preprocessing.std_format_df(df)
         df.to_csv(OUTPUT_PATH, index=False)
     else:
         print("No Fora CSV found, skipping...")

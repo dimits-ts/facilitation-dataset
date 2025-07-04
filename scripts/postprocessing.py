@@ -2,7 +2,7 @@ from pathlib import Path
 import pandas as pd
 from tqdm.auto import tqdm
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_DIR = Path("../datasets")
@@ -24,7 +24,7 @@ def get_unified_dataset(input_dir: Path) -> pd.DataFrame:
 
 
 def discard_one_man_convs(df: pd.DataFrame) -> pd.DataFrame:
-    valid_ids = preprocessing_util.get_valid_discussion_ids(
+    valid_ids = util.preprocessing.get_valid_discussion_ids(
         df, conv_id_col="conv_id", user_col="user"
     )
     print(f"Keeping {len(valid_ids)} valid comments, out of {df.shape[0]}.")

@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_PATH = Path("../downloads/vmd/data/datasets/dataset.csv")
@@ -45,16 +45,16 @@ def main():
     ).agg({"toxicity": "mean", "arg_qual": "mean"})
     df = df.reset_index()
 
-    df["reply_to"] = preprocessing_util.assign_reply_to(
+    df["reply_to"] = util.preprocessing.assign_reply_to(
         df, conv_id_col="conv_id", message_id_col="message_id"
     )
     df["reply_to"] = df.reply_to.astype(str)
-    df["notes"] = preprocessing_util.notes_from_columns(
+    df["notes"] = util.preprocessing.notes_from_columns(
         df, ["model", "toxicity", "arg_qual"]
     )
     df["dataset"] = "vmd"
     df = df.rename(columns={"message": "text"})
-    df = preprocessing_util.std_format_df(df)
+    df = util.preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

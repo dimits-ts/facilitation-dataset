@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_PATH = Path("../downloads/wikitactics/wikitactics.json")
@@ -63,17 +63,17 @@ def main():
     df["dataset"] = "wikitactics"
     # make sure message_id is unique across discussions
     df["message_id"] = df.apply(
-        lambda row: preprocessing_util.hash_to_md5(
+        lambda row: util.preprocessing.hash_to_md5(
             row.get("text") + row.get("conv_id")
         ),
         axis=1,
     )
-    df["reply_to"] = preprocessing_util.assign_reply_to(
+    df["reply_to"] = util.preprocessing.assign_reply_to(
         df, conv_id_col="conv_id", message_id_col="message_id"
     )
     df["notes"] = None
     df = df.rename(columns={"username": "user"})
-    df = preprocessing_util.std_format_df(df)
+    df = util.preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

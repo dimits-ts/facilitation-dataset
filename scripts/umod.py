@@ -3,7 +3,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_PATH = Path("../downloads/umod/umod.csv")
@@ -83,7 +83,7 @@ def main():
     df["user"] = "user-" + df.message_id
     
     df["dataset"] = "umod"
-    df["reply_to"] = preprocessing_util.assign_reply_to(
+    df["reply_to"] = util.preprocessing.assign_reply_to(
         df,
         conv_id_col="id",
         message_id_col="message_id",
@@ -91,7 +91,7 @@ def main():
     )
 
     df = df.rename(columns={"id": "conv_id"})
-    df = preprocessing_util.std_format_df(df)
+    df = util.preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

@@ -4,7 +4,7 @@ import json
 
 import pandas as pd
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_DIR = Path("../downloads/wikidisputes/data")
@@ -50,11 +50,11 @@ def main():
             "conversation.id": "message_id",
         }
     )
-    df["notes"] = preprocessing_util.notes_from_columns(
+    df["notes"] = util.preprocessing.notes_from_columns(
         df,
         ["escalated", "toxicity", "severe_toxicity"],
     )
-    df = preprocessing_util.std_format_df(df)
+    df = util.preprocessing.std_format_df(df)
 
     df.to_csv(OUTPUT_PATH, index=False)
 
