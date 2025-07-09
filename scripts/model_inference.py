@@ -3,7 +3,7 @@ import argparse
 
 import pandas as pd
 import torch
-from transformers import TextClassificationPipeline
+import datasets
 from tqdm.auto import tqdm
 
 import util.classification
@@ -12,50 +12,78 @@ import util.classification
 DATASET_PATH = Path("pefk.csv")
 
 
+def infer_moderator(annotated_df, model, tokenizer):
+    df = annotated_df.copy()
+    # format input texts with <CONTEXT> and <COMMENT> tokens
+    input_texts, _ = util.classification._build_discussion_dataset(df)
+    df["input_text"] = input_texts
+
+    model.eval()
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+
+    dataloader = _get_dataloader(df, tokenizer)
+
+    preds = []
+    with torch.no_grad():
+        for batch in tqdm(dataloader, desc="Running inference"):
+            input_ids = batch["input_ids"].to(device)
+            attention_mask = batch["attention_mask"].to(device)
+
+            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
+            logits = outputs.logits.squeeze(-1)
+            probs = torch.sigmoid(logits)
+            batch_preds = (probs > 0.5).long().cpu().tolist()
+            preds.extend(batch_preds)
+    return preds
+
+
+def _get_dataloader(df, tokenizer):
+    dataset = datasets.Dataset.from_dict({"text": df["input_text"].tolist()})
+    dataset = dataset.map(
+        lambda x: tokenizer(
+            x["text"],
+            truncation=True,
+            padding="max_length",
+            max_length=util.classification.MAX_LENGTH,
+        ),
+        batched=True,
+    )
+    dataset.set_format(type="torch", columns=["input_ids", "attention_mask"])
+
+    dataloader = torch.utils.data.DataLoader(
+        dataset, batch_size=util.classification.BATCH_SIZE
+    )
+    return dataloader
+
+
 def main(args):
     dataset_ls = [ds.strip() for ds in args.datasets.split(",")]
-    model_dir = args.model_dir
+    model_dir = Path(args.model_dir)
+
+    model, tokenizer = util.classification.load_trained_model_tokenizer(
+        model_dir
+    )
 
     df = pd.read_csv(DATASET_PATH)
-    df.text = df.text.astype(str)
-    df["is_moderator_inferred"] = df["dataset"].isin(dataset_ls)
-
-    annotated_df = df[df["dataset"].isin(dataset_ls)]
-    # TODO: delete
-    annotated_df = annotated_df.head(1000)
-
+    annotated_df = util.classification.preprocess_dataset(df, dataset_ls)
     if annotated_df.empty:
         print("No rows match the selected datasets.")
         return
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    model, tokenizer = util.classification.load_trained_model_tokenizer(
-        model_dir
-    )
-    pipe = TextClassificationPipeline(
-        model=model,
-        tokenizer=tokenizer,
-        return_all_scores=False,
-        device=device,
-    )
-
-    preds = []
-    for i in tqdm(
-        range(0, len(annotated_df), util.classification.BATCH_SIZE),
-        desc="Running inference",
-    ):
-        batch = annotated_df.iloc[i : i + util.classification.BATCH_SIZE]
-        texts = batch["text"].tolist()
-        outputs = pipe(texts)
-        batch_preds = [
-            1 if output["label"] == "LABEL_1" else 0 for output in outputs
+    preds = infer_moderator(annotated_df, model, tokenizer)
+    # Save predictions back to df
+    annotated_df["is_moderator_inferred"] = preds
+    inferred_ids = set(
+        annotated_df.loc[
+            annotated_df["is_moderator_inferred"] == 1, "message_id"
         ]
-        preds.extend(batch_preds)
+    )
+    df["is_moderator_inferred"] = (
+        df["message_id"].isin(inferred_ids).astype(bool)
+    )
 
-    df.loc[annotated_df.index, "is_moderator_inferred"] = preds
-    # TODO: delete
-    #df.to_csv(DATASET_PATH, index=False)
-    df.to_csv("test.csv", index=False)
+    df.to_csv("pefk2.csv", index=False)
 
 
 if __name__ == "__main__":
