@@ -93,7 +93,8 @@ def assign_reply_to(
     df_sorted = df.sort_values([conv_id_col, order_col])
     # shift comment id by 1
     reply_to = df_sorted.groupby(conv_id_col)[message_id_col].shift(1)
-    # The result is aligned with df_sorted, we must reindex to original df order
+    # The result is aligned with df_sorted, we must reindex to original
+    # df order
     reply_to = reply_to.reindex(df.index)
     return reply_to
 
