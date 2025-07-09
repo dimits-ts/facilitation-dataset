@@ -10,8 +10,9 @@ import sklearn.metrics
 import util.classification
 
 
-CHECKPOINTS_DIRECTORY = Path("checkpoints")
 DATASET_PATH = Path("pefk.csv")
+# make sure this is the same as the one used during model training
+# in order to obtain the proper test set
 SEED = 42
 MAX_LENGTH = 4096
 
@@ -63,33 +64,32 @@ def evaluate_model(model, test_dataset):
 
 def main(args):
     dataset_ls = args.dataset.split(",")
+    model_dir = Path(args.model_dir)
+    print(f"Testing model in directory '{model_dir}'")
+
     util.classification.set_seed(SEED)
     results = []
 
-    for model_dir in tqdm(list(CHECKPOINTS_DIRECTORY.rglob("best_model"))):
-        print(f"Testing model in directory '{model_dir}'")
+    model, tokenizer = load_model_tokenizer(model_dir)
+    test_dataset = load_test_dataset(
+        DATASET_PATH,
+        dataset_ls=dataset_ls,
+        tokenizer=tokenizer,
+        seed=SEED,
+        max_length=MAX_LENGTH,
+    )
 
-        model, tokenizer = load_model_tokenizer(model_dir)
-        test_dataset = load_test_dataset(
-            DATASET_PATH,
-            dataset_ls=dataset_ls,
-            tokenizer=tokenizer,
-            seed=SEED,
-            max_length=MAX_LENGTH,
+    # If test_dataset is a Dataset object, convert to DataLoader
+    # for batch eval
+    if hasattr(test_dataset, "collate_fn"):
+        test_loader = torch.utils.data.DataLoader(
+            test_dataset, batch_size=8, collate_fn=test_dataset.collate_fn
         )
+    else:
+        test_loader = test_dataset  # assume iterable of dicts if pre-batched
 
-        # If test_dataset is a Dataset object, convert to DataLoader for batch eval
-        if hasattr(test_dataset, "collate_fn"):
-            test_loader = torch.utils.data.DataLoader(
-                test_dataset, batch_size=8, collate_fn=test_dataset.collate_fn
-            )
-        else:
-            test_loader = (
-                test_dataset  # assume iterable of dicts if pre-batched
-            )
-
-        metrics = evaluate_model(model, test_loader)
-        results.append({"model": str(model_dir), **metrics})
+    metrics = evaluate_model(model, test_loader)
+    results.append({"model": str(model_dir), **metrics})
 
     results_df = pd.DataFrame(results)
     print(results_df)
@@ -98,7 +98,13 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dataset selection")
     parser.add_argument(
-        "dataset", type=str, help="Comma-separated list of datasets"
+        "datasets", type=str, help="Comma-separated list of datasets"
+    )
+    parser.add_argument(
+        "--model_dir",
+        type=str,
+        help="Checkpoint directory for trained model",
+        required=True,
     )
     args = parser.parse_args()
     main(args)
