@@ -11,7 +11,6 @@ The dataset is released under a CC-BY-SA License, and the code producing it uses
 
 ## List of datasets used
 
-- [WikiDisputes](https://aclanthology.org/2021.eacl-main.173/)
 - [WikiTactics](https://arxiv.org/abs/2212.08353)
 - [WikiConv](https://aclanthology.org/D18-1305/)  
 - [Conversations Gone Awry / CMV II](https://arxiv.org/abs/1909.01362)
@@ -43,7 +42,7 @@ bash create_dataset.sh
 You may select a subset of the above datasets to be aggregated by deleting any of the following entries in the `create_dataset.sh` script:
 
 ```bash
-bash master.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 wikidisputes fora | ts %Y-%m-%d_%H-%M-%S | tee "../$LOG_FILE"
+bash master.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 fora | ts %Y-%m-%d_%H-%M-%S | tee "../$LOG_FILE"
 ``` 
 
 ## Important Notes
