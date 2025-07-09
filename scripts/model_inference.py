@@ -12,7 +12,7 @@ import util.classification
 DATASET_PATH = Path("pefk.csv")
 
 
-def infer_moderator(annotated_df, model, tokenizer):
+def infer_moderator(annotated_df, model, tokenizer, threshold: float):
     df = annotated_df.copy()
     # format input texts with <CONTEXT> and <COMMENT> tokens
     input_texts, _ = util.classification._build_discussion_dataset(df)
@@ -33,7 +33,7 @@ def infer_moderator(annotated_df, model, tokenizer):
             outputs = model(input_ids=input_ids, attention_mask=attention_mask)
             logits = outputs.logits.squeeze(-1)
             probs = torch.sigmoid(logits)
-            batch_preds = (probs > 0.5).long().cpu().tolist()
+            batch_preds = (probs > threshold).long().cpu().tolist()
             preds.extend(batch_preds)
     return preds
 
@@ -60,6 +60,7 @@ def _get_dataloader(df, tokenizer):
 def main(args):
     dataset_ls = [ds.strip() for ds in args.datasets.split(",")]
     model_dir = Path(args.model_dir)
+    decision_threshold = args.threshold
 
     model, tokenizer = util.classification.load_trained_model_tokenizer(
         model_dir
@@ -71,7 +72,7 @@ def main(args):
         print("No rows match the selected datasets.")
         return
 
-    preds = infer_moderator(annotated_df, model, tokenizer)
+    preds = infer_moderator(annotated_df, model, tokenizer, decision_threshold)
     # Save predictions back to df
     annotated_df["is_moderator_inferred"] = preds
     inferred_ids = set(
@@ -98,6 +99,13 @@ if __name__ == "__main__":
         type=str,
         help="Checkpoint directory for trained model",
         required=True,
+    )
+    parser.add_argument(
+        "--decision_threshold",
+        type=float,
+        help="Threshold above which a comment is inferred as facilitative",
+        required=False,
+        default=0.5
     )
     args = parser.parse_args()
     main(args)
