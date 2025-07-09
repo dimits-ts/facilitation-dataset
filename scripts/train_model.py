@@ -3,30 +3,18 @@ import argparse
 
 import pandas as pd
 import transformers
-import sklearn.metrics
+
 
 import util.classification
 
 
-MAX_LENGTH = 4096
-SEED = 42
 GRAD_ACC_STEPS = 1
 EVAL_STEPS = 400
 EPOCHS = 100
-BATCH_SIZE = 32
 EARLY_STOP_WARMUP = 2000
 EARLY_STOP_THRESHOLD = 10e-5
 EARLY_STOP_PATIENCE = 20
 FINETUNE_ONLY_HEAD = True
-
-
-def compute_metrics(eval_pred):
-    logits, labels = eval_pred
-    preds = (logits.reshape(-1) > 0).astype(int)
-    return {
-        "accuracy": sklearn.metrics.accuracy_score(labels, preds),
-        "f1": sklearn.metrics.f1_score(labels, preds),
-    }
 
 
 def train_model(
@@ -47,8 +35,8 @@ def train_model(
 
     training_args = transformers.TrainingArguments(
         output_dir=output_dir,
-        per_device_train_batch_size=BATCH_SIZE,
-        per_device_eval_batch_size=BATCH_SIZE,
+        per_device_train_batch_size=util.classification.BATCH_SIZE,
+        per_device_eval_batch_size=util.classification.BATCH_SIZE,
         num_train_epochs=EPOCHS,
         eval_strategy="steps",
         eval_steps=int(EVAL_STEPS / GRAD_ACC_STEPS),
@@ -81,7 +69,7 @@ def train_model(
         args=training_args,
         train_dataset=train_dat,
         eval_dataset=val_dat,
-        compute_metrics=compute_metrics,
+        compute_metrics=util.classification.transformerscompute_metrics,
         callbacks=[early_stopping],
         **{"data_collator": data_collator}
     )
@@ -103,7 +91,8 @@ def load_model_tokenizer():
         problem_type="multi_label_classification",
     )
     tokenizer = transformers.LongformerTokenizerFast.from_pretrained(
-        "allenai/longformer-base-4096", max_length=MAX_LENGTH
+        "allenai/longformer-base-4096",
+        max_length=util.classification.MAX_LENGTH,
     )
     return model, tokenizer
 
@@ -114,7 +103,7 @@ def main(args) -> None:
     output_dir = Path(args.output_dir)
 
     print("Starting training with datasets: ", dataset_ls)
-    util.classification.set_seed(SEED)
+    util.classification.set_seed(util.classification.SEED)
     model, tokenizer = load_model_tokenizer()
 
     df = pd.read_csv("../pefk.csv")
@@ -123,7 +112,10 @@ def main(args) -> None:
 
     train_dataset, val_dataset, test_dataset = (
         util.classification.df_to_train_val_test_dataset(
-            df, tokenizer, seed=SEED, max_length=MAX_LENGTH
+            df,
+            tokenizer,
+            seed=util.classification.SEED,
+            max_length=util.classification.MAX_LENGTH,
         )
     )
 

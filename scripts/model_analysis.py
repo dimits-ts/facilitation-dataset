@@ -11,10 +11,6 @@ import util.classification
 
 
 DATASET_PATH = Path("pefk.csv")
-# make sure this is the same as the one used during model training
-# in order to obtain the proper test set
-SEED = 42
-MAX_LENGTH = 4096
 
 
 def load_model_tokenizer(model_dir: Path):
@@ -36,18 +32,26 @@ def load_test_dataset(
     return test_dataset
 
 
-def evaluate_model(model, test_dataset):
+def evaluate_model(model, test_dataset, tokenizer):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print("Running model on", device)
     model.eval()
-    model.to("cuda" if torch.cuda.is_available() else "cpu")
+    model.to(device)
+
+    data_collator = transformers.DataCollatorWithPadding(tokenizer)
+    test_loader = torch.utils.data.DataLoader(
+        test_dataset,
+        batch_size=util.classification.BATCH_SIZE,
+        collate_fn=data_collator,
+    )
 
     all_preds = []
     all_labels = []
-
-    for batch in tqdm(test_dataset):
-        # Move to device
-        input_ids = batch["input_ids"].unsqueeze(0).to(model.device)
-        attention_mask = batch["attention_mask"].unsqueeze(0).to(model.device)
-        labels = batch["labels"].unsqueeze(0).to(model.device)
+    for batch in tqdm(test_loader):
+        # Move batch tensors to device
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
+        labels = batch["labels"].to(device)
 
         with torch.no_grad():
             outputs = model(input_ids=input_ids, attention_mask=attention_mask)
@@ -63,36 +67,22 @@ def evaluate_model(model, test_dataset):
 
 
 def main(args):
-    dataset_ls = args.dataset.split(",")
+    dataset_ls = args.datasets.split(",")
     model_dir = Path(args.model_dir)
     print(f"Testing model in directory '{model_dir}'")
 
-    util.classification.set_seed(SEED)
-    results = []
-
+    util.classification.set_seed(util.classification.SEED)
     model, tokenizer = load_model_tokenizer(model_dir)
     test_dataset = load_test_dataset(
         DATASET_PATH,
         dataset_ls=dataset_ls,
         tokenizer=tokenizer,
-        seed=SEED,
-        max_length=MAX_LENGTH,
+        seed=util.classification.SEED,
+        max_length=util.classification.MAX_LENGTH,
     )
 
-    # If test_dataset is a Dataset object, convert to DataLoader
-    # for batch eval
-    if hasattr(test_dataset, "collate_fn"):
-        test_loader = torch.utils.data.DataLoader(
-            test_dataset, batch_size=8, collate_fn=test_dataset.collate_fn
-        )
-    else:
-        test_loader = test_dataset  # assume iterable of dicts if pre-batched
-
-    metrics = evaluate_model(model, test_loader)
-    results.append({"model": str(model_dir), **metrics})
-
-    results_df = pd.DataFrame(results)
-    print(results_df)
+    metrics = evaluate_model(model, test_dataset, tokenizer)
+    print(metrics)
 
 
 if __name__ == "__main__":

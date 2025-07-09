@@ -5,6 +5,12 @@ import torch.nn
 import transformers
 import datasets
 from sklearn.model_selection import train_test_split
+import sklearn.metrics
+
+
+SEED = 42
+MAX_LENGTH = 4096
+BATCH_SIZE = 32
 
 
 class WeightedLossTrainer(transformers.Trainer):
@@ -114,7 +120,9 @@ def df_to_train_val_test_dataset(
     return train_dataset, val_dataset, test_dataset
 
 
-def __build_discussion_dataset(df: pd.DataFrame) -> tuple[list[str], list[str]]:
+def _build_discussion_dataset(
+    df: pd.DataFrame,
+) -> tuple[list[str], list[str]]:
     inputs = []
     outputs = []
 
@@ -140,7 +148,7 @@ def __build_discussion_dataset(df: pd.DataFrame) -> tuple[list[str], list[str]]:
 
 
 def _df_to_dataset(df, tokenizer, max_length: int):
-    x, y = __build_discussion_dataset(df)
+    x, y = _build_discussion_dataset(df)
     dataset = _torch_dataset(x, y, tokenizer, max_length)
     return dataset
 
@@ -194,3 +202,12 @@ def _train_validate_test_split(
     )
 
     return train, validate, test
+
+
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    preds = (logits.reshape(-1) > 0).astype(int)
+    return {
+        "accuracy": sklearn.metrics.accuracy_score(labels, preds),
+        "f1": sklearn.metrics.f1_score(labels, preds),
+    }
