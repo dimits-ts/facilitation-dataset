@@ -3,22 +3,14 @@ import argparse
 
 from tqdm.auto import tqdm
 import pandas as pd
+import numpy as np
 import torch
 import transformers
-import sklearn.metrics
 
 import util.classification
 
 
 DATASET_PATH = Path("pefk.csv")
-
-
-def load_model_tokenizer(model_dir: Path):
-    model = transformers.AutoModelForSequenceClassification.from_pretrained(
-        model_dir
-    )
-    tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
-    return model, tokenizer
 
 
 def load_test_dataset(
@@ -35,6 +27,7 @@ def load_test_dataset(
 def evaluate_model(model, test_dataset, tokenizer):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print("Running model on", device)
+
     model.eval()
     model.to(device)
 
@@ -45,25 +38,25 @@ def evaluate_model(model, test_dataset, tokenizer):
         collate_fn=data_collator,
     )
 
-    all_preds = []
-    all_labels = []
+    logits_list = []
+    labels_list = []
     for batch in tqdm(test_loader):
-        # Move batch tensors to device
         input_ids = batch["input_ids"].to(device)
         attention_mask = batch["attention_mask"].to(device)
         labels = batch["labels"].to(device)
 
         with torch.no_grad():
             outputs = model(input_ids=input_ids, attention_mask=attention_mask)
-            preds = torch.argmax(outputs.logits, dim=1)
+            logits = outputs.logits.detach().cpu().numpy()
+            labels = labels.cpu().numpy()
 
-        all_preds.extend(preds.cpu().tolist())
-        all_labels.extend(labels.cpu().tolist())
+        logits_list.append(logits)
+        labels_list.append(labels)
 
-    accuracy = sklearn.metrics.accuracy_score(all_labels, all_preds)
-    f1 = sklearn.metrics.f1_score(all_labels, all_preds, average="weighted")
+    logits = np.concatenate(logits_list, axis=0)
+    labels = np.concatenate(labels_list, axis=0)
 
-    return {"accuracy": accuracy, "f1": f1}
+    return util.classification.compute_metrics((logits, labels))
 
 
 def main(args):
@@ -72,7 +65,9 @@ def main(args):
     print(f"Testing model in directory '{model_dir}'")
 
     util.classification.set_seed(util.classification.SEED)
-    model, tokenizer = load_model_tokenizer(model_dir)
+    model, tokenizer = util.classification.load_trained_model_tokenizer(
+        model_dir
+    )
     test_dataset = load_test_dataset(
         DATASET_PATH,
         dataset_ls=dataset_ls,

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import torch
@@ -85,6 +87,14 @@ class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
         return control
 
 
+def load_trained_model_tokenizer(model_dir: Path):
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        model_dir
+    )
+    tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
+    return model, tokenizer
+
+
 def preprocess_dataset(
     df: pd.DataFrame, dataset_ls: list[str]
 ) -> pd.DataFrame:
@@ -118,6 +128,15 @@ def df_to_train_val_test_dataset(
     test_dataset = _df_to_dataset(test_df, tokenizer, max_length)
 
     return train_dataset, val_dataset, test_dataset
+
+
+def compute_metrics(eval_pred):
+    logits, labels = eval_pred
+    preds = (logits.reshape(-1) > 0).astype(int)
+    return {
+        "accuracy": sklearn.metrics.accuracy_score(labels, preds),
+        "f1": sklearn.metrics.f1_score(labels, preds),
+    }
 
 
 def _build_discussion_dataset(
@@ -202,12 +221,3 @@ def _train_validate_test_split(
     )
 
     return train, validate, test
-
-
-def compute_metrics(eval_pred):
-    logits, labels = eval_pred
-    preds = (logits.reshape(-1) > 0).astype(int)
-    return {
-        "accuracy": sklearn.metrics.accuracy_score(labels, preds),
-        "f1": sklearn.metrics.f1_score(labels, preds),
-    }
