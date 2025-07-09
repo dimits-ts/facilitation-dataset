@@ -2,7 +2,7 @@ datasets/
 downloads/
 downloads_external/
 logs*/
-results*/
+checkpoints/
 *.csv
 
 

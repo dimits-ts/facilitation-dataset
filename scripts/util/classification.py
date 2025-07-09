@@ -114,7 +114,7 @@ def df_to_train_val_test_dataset(
     return train_dataset, val_dataset, test_dataset
 
 
-def build_discussion_dataset(df: pd.DataFrame) -> tuple[list[str], list[str]]:
+def __build_discussion_dataset(df: pd.DataFrame) -> tuple[list[str], list[str]]:
     inputs = []
     outputs = []
 
@@ -140,7 +140,7 @@ def build_discussion_dataset(df: pd.DataFrame) -> tuple[list[str], list[str]]:
 
 
 def _df_to_dataset(df, tokenizer, max_length: int):
-    x, y = build_discussion_dataset(df)
+    x, y = __build_discussion_dataset(df)
     dataset = _torch_dataset(x, y, tokenizer, max_length)
     return dataset
 
