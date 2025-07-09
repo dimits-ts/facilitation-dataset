@@ -13,7 +13,7 @@ def get_unified_dataset(input_dir: Path) -> pd.DataFrame:
     dfs = []
     for file_path in tqdm(
         list(input_dir.rglob("*.csv")), desc="Combining datasets"
-    ):  
+    ):
         try:
             df = pd.read_csv(file_path)
             dfs.append(df)
@@ -24,6 +24,7 @@ def get_unified_dataset(input_dir: Path) -> pd.DataFrame:
 
 
 def discard_one_man_convs(df: pd.DataFrame) -> pd.DataFrame:
+    print("Removing non-discussion entries...")
     valid_ids = util.preprocessing.get_valid_discussion_ids(
         df, conv_id_col="conv_id", user_col="user"
     )
@@ -32,8 +33,44 @@ def discard_one_man_convs(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
+def find_duplicate_comments(df: pd.DataFrame) -> pd.Series:
+    print("Removing duplicate entries...")
+    wikiconv_df = df[df["dataset"] == "wikiconv"]
+    wikitactics_df = df[df["dataset"] == "wikitactics"]
+
+    wikitactics_keys = set(
+        zip(
+            wikitactics_df["text"],
+            wikitactics_df["user"],
+            wikitactics_df["conv_id"],
+        )
+    )
+    duplicate_mask = wikiconv_df.apply(
+        lambda row: (row["text"], row["user"], row["conv_id"])
+        in wikitactics_keys,
+        axis=1,
+    )
+    return wikiconv_df.loc[duplicate_mask, "message_id"].tolist()
+
+
+def discard_duplicates(df):
+    initial_size = len(df)
+
+    keys = set(find_duplicate_comments(df))
+    df = df[~df.message_id.isin(keys)]
+
+    print(f"Removed {initial_size - len(df)} duplicate comments.")
+    return df
+
+
 def main():
     df = get_unified_dataset(INPUT_DIR)
+    if (
+        "wikiconv" in df.dataset.unique()
+        and "wikitactics" in df.dataset.unique()
+    ):
+        df = discard_duplicates(df)
+
     df = discard_one_man_convs(df)
     df.to_csv(OUTPUT_PATH, index=False)
     print(f"Dataset exported as {OUTPUT_PATH}")
