@@ -60,7 +60,7 @@ def _get_dataloader(df, tokenizer):
 def main(args):
     dataset_ls = [ds.strip() for ds in args.datasets.split(",")]
     model_dir = Path(args.model_dir)
-    decision_threshold = args.threshold
+    decision_threshold = args.decision_threshold
 
     model, tokenizer = util.classification.load_trained_model_tokenizer(
         model_dir
