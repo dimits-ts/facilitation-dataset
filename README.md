@@ -11,6 +11,7 @@ The dataset is released under a CC-BY-SA License, and the code producing it uses
 
 ## List of datasets used
 
+- [WikiDisputes](https://aclanthology.org/2021.eacl-main.173/)
 - [WikiTactics](https://arxiv.org/abs/2212.08353)
 - [WikiConv](https://aclanthology.org/D18-1305/)  
 - [Conversations Gone Awry / CMV II](https://arxiv.org/abs/1909.01362)
