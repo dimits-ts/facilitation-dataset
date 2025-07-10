@@ -15,8 +15,13 @@ OUTPUT_PATH = Path("../datasets/cmv_awry2.csv")
 def main():
     df = pd.read_json(INPUT_PATH, lines=True)
 
+    deleted_comments = df.text == "[deleted]"
+    print(f"Removed {len(deleted_comments)} deleted comments")
+    df = df[~deleted_comments]
+
     df["dataset"] = "cmv_awry"
     df["is_moderator"] = False
+    
     df.meta = df.meta.apply(lambda _dict: f"Derailment={_dict['score']}")
     df = df.rename(
         columns={
