@@ -72,84 +72,11 @@ bash master.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 fora | ts %
 | notes     | JSON  | A dictionary holding notable dataset-specific information |  
 
 
-## Preprocessing 
-
-### General
-- We exclude comments with no text
-
-### Wikiconv
-The Wikiconv corpus does not contain information about which user is a moderator/facilitator. Therefore, all comments relating to Wikiconv are tagged as non-moderators
-
-- Additionally, we follow the [instructions of the original researchers](https://github.com/conversationai/wikidetox/blob/main/wikiconv/README.md), and select only discussions which have at least two comments by different users
-    - Wikipedia (thankfully) does not track users who log in with only an IP address (in the original dataset, their user_id is always set to 0 and their username is of the form 211.111.111.xxx). We consider each such username to be a separate user.
-    - Due to the size of the dataset, we have to partially load it during preprocessing. Thus, there is a small chance every 100,000 records that a discussion is marked as a false negative and a part of it gets discarded.
-    - We only include English comments in the final dataset. We use a small, efficient library (`py3langid`) for language recognition, due to the large size of Wikiconv. We include every comment that is English with a confidence score of more than 75%. This can be trivially tuned in the `scripts/wikiconv.py` file. Non-english comments are discarded *before* selecting valid discussions (see point above).
-
-
-### Wikitactics
-In WikiTactics, we infer facilitative actions by whether the comment belongs in any of the following categories:
-- Asking questions
-- Coordinating edits
-- Providing clarification
-- Suggesting a compromise
-- Contextualisation
-- DH6: Refutation of opponent's argument (with evidence or reasoning)
-- DH5: Counterargument with new evidence / reasoning
-- DH7: Refuting the central point
-
-
-### Wikidisputes
-In WikiDisputes we mark a discussion as escalated when the derailement value is in the 60th upper percentile 
-
-Since only 0.03% of the comments in the dataset are made by moderators, we mark the dataset as not supporting moderation and override its labels via classification.
-
-
-### UMOD
-In UMOD, facilitative actions are marked as a gradient from 0 (no facilitation) to 1 (full facilitation). We adopt a threshold of 0.75 to consider an action as facilitative, with more than 50% annotator agreement (measured as entropy in the original dataset).
-
-### IQ2
-In IQ2, we remove verbal linguistic markers ("...", "uh,").
-
+## Preprocessing
+See [preprocessing.md](preprocessing.md).
 
 ## Facilitative detection
-
-We use a Longformer model to estimate facilitative comments in the "Wikiconv" and "Conversations Gone Awry" datasets, by using the labels provided by the rest of the datasets.
-
-We train two models; one on the entire labelled PEFK dataset (minus the VMD dataset), and one exclusively on the "WikiTactics" dataset. Our assumption was that the first model could leverage the multi-domain nature of PEFK (online/real-life/radio discussions) to extract generalizable facilitation features, while the second could leverage the same domain as Wikiconv to better annotate it.
-
-
-### Results
-
-|  Measure/Model | Combined  | Wikitactics-only  |   
-|---|---|---|
-| Accuracy |  0.78 |  0.5426 |  
-| F1 (macro-weighted) |  0.69 |  0.5621 | 
-
-
-### Training Time 
-We used a single Quarto 6000 RTX GPU for training both models. 
-
-|   | Combined  | Wikitactics-only  |   
-|---|---|---|
-| Training Time (hours) |  100 | 12 |  
-
-
-### Replication code
-
-Training code: [scripts/model_train.py](scripts/model_train.py). 
-
-Evaluation code (on test set): [scripts/model_analysis.py](scripts/model_analysis.py). 
-
-Inference code (on actual dataset): [scripts/model_inference.py](scripts/model_inference.py). 
-
-
-### Parameters
-
-We use the default pre-trained version of the Longformer model, with its weights frozen and a binary classification head. We use the default optimizer with Hugging Face Trainer's default parameters, but modify the BCE loss function to have a positive weight equal to the ratio of positive labels.
-
-During training, we use a batch size of 32, max sequence length of 4096, and pin all seeds to the number 42. The wikitactics/combined models were left to run with an Early Stopping algorithm for 100/1000 epochs respectively, with delta=10e-5 and a patience of 20, with evaluation every 100/400 steps. We select the best model according to f1 scores on the validation set. We stopped the training of the combined model after 46,000 steps.
-
-
+See [inference.md](inference.md).
 
 ## Acknowledgements
 
