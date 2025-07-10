@@ -10,11 +10,12 @@ import util.classification
 
 GRAD_ACC_STEPS = 1
 EVAL_STEPS = 400
-EPOCHS = 100
-EARLY_STOP_WARMUP = 2000
-EARLY_STOP_THRESHOLD = 10e-5
-EARLY_STOP_PATIENCE = 20
+EPOCHS = 30
+EARLY_STOP_WARMUP = 1000
+EARLY_STOP_THRESHOLD = 0.001
+EARLY_STOP_PATIENCE = 5
 FINETUNE_ONLY_HEAD = True
+MODEL = "google/bigbird-roberta-base"
 
 
 def train_model(
@@ -46,7 +47,7 @@ def train_model(
         logging_dir=logs_dir,
         logging_steps=int(EVAL_STEPS / GRAD_ACC_STEPS),
         load_best_model_at_end=True,
-        metric_for_best_model="f1",
+        metric_for_best_model="loss",
         greater_is_better=True,
         gradient_accumulation_steps=GRAD_ACC_STEPS,
         report_to="tensorboard",
@@ -69,7 +70,7 @@ def train_model(
         args=training_args,
         train_dataset=train_dat,
         eval_dataset=val_dat,
-        compute_metrics=util.classification.transformerscompute_metrics,
+        compute_metrics=util.classification.compute_metrics,
         callbacks=[early_stopping],
         **{"data_collator": data_collator}
     )
@@ -85,14 +86,13 @@ def train_model(
 
 
 def load_model_tokenizer():
-    model = transformers.LongformerForSequenceClassification.from_pretrained(
-        "allenai/longformer-base-4096",
+    model = transformers.BigBirdForSequenceClassification.from_pretrained(
+        MODEL,
         num_labels=1,
         problem_type="multi_label_classification",
     )
-    tokenizer = transformers.LongformerTokenizerFast.from_pretrained(
-        "allenai/longformer-base-4096",
-        max_length=util.classification.MAX_LENGTH,
+    tokenizer = transformers.BigBirdTokenizer.from_pretrained(
+        MODEL,
     )
     return model, tokenizer
 
