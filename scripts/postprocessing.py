@@ -33,30 +33,36 @@ def discard_one_man_convs(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def find_duplicate_comments(df: pd.DataFrame) -> pd.Series:
-    print("Removing duplicate entries...")
-    wikiconv_df = df[df["dataset"] == "wikiconv"]
-    wikitactics_df = df[df["dataset"] == "wikitactics"]
-
-    wikitactics_keys = set(
-        zip(
-            wikitactics_df["text"],
-            wikitactics_df["user"],
-            wikitactics_df["conv_id"],
-        )
+def find_duplicate_comments(
+    df: pd.DataFrame, original_dataset: str, duplicate_dataset: str
+) -> pd.Series:
+    print(
+        "Removing duplicate entries "
+        f"(original dataset: '{original_dataset}' -> "
+        f"duplicate dataset: '{duplicate_dataset}')..."
     )
-    duplicate_mask = wikiconv_df.apply(
-        lambda row: (row["text"], row["user"], row["conv_id"])
-        in wikitactics_keys,
-        axis=1,
+    original_dataset_df = df[df["dataset"] == original_dataset]
+    duplicate_dataset_df = df[df["dataset"] == duplicate_dataset]
+
+    original_keys = set(original_dataset_df["conv_id"])
+    duplicate_mask = duplicate_dataset_df.conv_id.apply(
+        lambda x: x in original_keys
     )
-    return wikiconv_df.loc[duplicate_mask, "message_id"].tolist()
+    return duplicate_dataset_df.loc[duplicate_mask, "message_id"].tolist()
 
 
-def discard_duplicates(df):
+def discard_duplicates(
+    df: pd.DataFrame, original_dataset: str, duplicate_dataset: str
+) -> pd.DataFrame:
     initial_size = len(df)
 
-    keys = set(find_duplicate_comments(df))
+    keys = set(
+        find_duplicate_comments(
+            df,
+            original_dataset=original_dataset,
+            duplicate_dataset=duplicate_dataset,
+        )
+    )
     df = df[~df.message_id.isin(keys)]
 
     print(f"Removed {initial_size - len(df)} duplicate comments.")
@@ -69,7 +75,21 @@ def main():
         "wikiconv" in df.dataset.unique()
         and "wikitactics" in df.dataset.unique()
     ):
-        df = discard_duplicates(df)
+        df = discard_duplicates(
+            df,
+            original_dataset="wikitactics",
+            duplicate_dataset="wikiconv",
+        )
+
+    if (
+        "wikiconv" in df.dataset.unique()
+        and "wikidisputes" in df.dataset.unique()
+    ):
+        df = discard_duplicates(
+            df,
+            original_dataset="wikidisputes",
+            duplicate_dataset="wikiconv",
+        )
 
     df = discard_one_man_convs(df)
     df.to_csv(OUTPUT_PATH, index=False)
