@@ -57,6 +57,12 @@ def main():
         df, ["model", "toxicity", "arg_qual"]
     )
     df["dataset"] = "vmd"
+
+    df["escalated"] = False
+    df["escalation_supported"] = False
+
+    df["moderation_supported"] = True
+
     df = df.rename(columns={"message": "text"})
     df = util.preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)

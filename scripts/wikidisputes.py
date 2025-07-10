@@ -38,6 +38,8 @@ def main():
     df = df[df["conversation.text"].apply(len) > 2]
 
     df["is_moderator"] = df["conversation.user"] == df["dispute.mediator"]
+    df["moderation_supported"] = False
+    
     df["dataset"] = "wikidisputes"
 
     df["conversation.id"] = "wikidisputes-" + df["conversation.id"]
@@ -53,8 +55,10 @@ def main():
     )
     df["notes"] = util.preprocessing.notes_from_columns(
         df,
-        ["escalated", "toxicity", "severe_toxicity"],
+        ["toxicity", "severe_toxicity"],
     )
+    # df.escalated already in dataframe
+    df["escalation_supported"] = True
     df = util.preprocessing.std_format_df(df)
 
     df.to_csv(OUTPUT_PATH, index=False)

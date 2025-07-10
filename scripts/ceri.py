@@ -33,6 +33,7 @@ def process_sheet(df: pd.DataFrame, sheet_index: int) -> pd.DataFrame:
 
     df["COMMENT"] = df["COMMENT"].apply(rem_html_tags)
     df["is_moderator"] = df["USER LOGIN"].apply(is_moderator)
+    df["moderation_supported"] = True
 
     # Use POST ID if it exists, otherwise fallback to SUBTOPIC
     if "POST ID" in df.columns and not df["POST ID"].isnull().all():
@@ -43,7 +44,9 @@ def process_sheet(df: pd.DataFrame, sheet_index: int) -> pd.DataFrame:
     df["conv_id"] = conv_source.apply(util.preprocessing.hash_to_md5)
     df["dataset"] = "ceri"
     df["notes"] = None
-
+    df["escalated"] = False
+    df["escalation_supported"] = False
+    
     df = df.rename(
         {
             "COMMENT": "text",

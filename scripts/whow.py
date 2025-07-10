@@ -44,12 +44,15 @@ def main():
     df = import_df(INPUT_DIR)
     df = df.astype(str)
     df = merge_back_to_back_comments(df)
+
     df["is_moderator"] = df.role == "mod"
+    df["moderation_supported"] = True
+    
     df["user"] = df.speaker.apply(util.preprocessing.hash_to_md5)
 
     df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
     df["message_id"] = df.apply(
-        lambda row: f"whow-{row.get("conv_id")}-{row.get("speaker_turn")}",
+        lambda row: f"whow-{row.get('conv_id')}-{row.get('speaker_turn')}",
         axis=1,
     )
     df = df.sort_values(by="message_id")
@@ -62,6 +65,9 @@ def main():
 
     df["dataset"] = "whow"
     df["notes"] = None
+
+    df["escalated"] = False
+    df["escalation_supported"] = False
 
     df = util.preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)

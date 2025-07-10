@@ -17,7 +17,8 @@ def main():
         df.conversation_id = df.conversation_id.astype(str)
         df.SpeakerTurn = df.SpeakerTurn.astype(int)
         df["message_id"] = df.apply(
-            lambda row: f"fora-{row.get("conversation_id")}-{row.get("SpeakerTurn")}",
+            lambda row: f"fora-{row.get('conversation_id')}"
+            f"-{row.get('SpeakerTurn')}",
             axis=1,
         )
         df["reply_to"] = util.preprocessing.assign_reply_to(
@@ -41,6 +42,9 @@ def main():
             ],
         )
         df["dataset"] = "fora"
+        df["escalated"] = False
+        df["escalation_supported"] = False
+        df["moderation_supported"] = False
 
         df = df.rename(
             columns={

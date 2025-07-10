@@ -54,12 +54,13 @@ def main():
         ),
         axis=1,
     )
+    df["moderation_supported"] = False
 
     df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
     # make sure message_id is unique across discussions
     df["message_id"] = df.apply(
-        lambda row: f"wikitactics-{row.get("conv_id")}-"
-        f"{row.get("speaker_turn")}",
+        lambda row: f"wikitactics-{row.get('conv_id')}-"
+        f"{row.get('speaker_turn')}",
         axis=1,
     )
     df["reply_to"] = util.preprocessing.assign_reply_to(
@@ -70,6 +71,8 @@ def main():
     )
     df["dataset"] = "wikitactics"
     df["notes"] = None
+    df["escalated"] = df["escalation_label"]
+    df["escalation_supported"] = True
     df = df.rename(columns={"username": "user"})
     df = util.preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)

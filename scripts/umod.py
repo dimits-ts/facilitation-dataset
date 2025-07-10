@@ -69,7 +69,7 @@ def main():
     )
     df["speaker_turn"] = np.where(df.source == "reply", 1, 0)
     df["message_id"] = df.apply(
-        lambda row: f"umod-{row.get("id")}-{row.get("speaker_turn")}",
+        lambda row: f"umod-{row.get('id')}-{row.get('speaker_turn')}",
         axis=1,
     )
     # if comment is reply, is 70% moderation (aggregated via labels) and
@@ -79,6 +79,8 @@ def main():
         & (df.entropy_moderation <= 0.75)
         & (df.softlabel_raw >= 0.75)
     )
+    df["moderation_supported"] = True
+
     # all users are unique
     df["user"] = "user-" + df.message_id
     
@@ -89,6 +91,8 @@ def main():
         message_id_col="message_id",
         order_col="speaker_turn",
     )
+    df["escalated"] = False
+    df["escalation_supported"] = False
 
     df = df.rename(columns={"id": "conv_id"})
     df = util.preprocessing.std_format_df(df)

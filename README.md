@@ -63,6 +63,9 @@ bash master.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 fora | ts %
 | reply_to    | string | The ID of the comment which the current comment responds to. nan if the comment does not respond to another comment (e.g., it's the Original Post (OP)). |
 | user        | string | Username or hash of the user that posted the comment |
 | is_moderator| bool   | Whether the user is a moderator/facilitator. In some datasets (e.g., UMOD, Wikitactics), normal users are considered facilitators if their *comments* are facilitative in nature. See Section `Preprocessing` for more details |
+| moderation_supported | bool | True if the moderation labels are directly computed from the original dataset |
+| escalated | bool | True if the comment caused a discussion to get derailed |
+| escalation_supported | bool | True if the escalation labels are directly computed from the original dataset |
 | text      | string | The contents of the comment  |
 | dataset   | string | The dataset from which this comments originated from |
 | notes     | JSON  | A dictionary holding notable dataset-specific information |  
@@ -76,7 +79,7 @@ bash master.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 fora | ts %
         - Wikipedia (thankfully) does not track users who log in with only an IP address (in the original dataset, their user_id is always set to 0 and their username is of the form 211.111.111.xxx). We consider each such username to be a separate user.
         - Due to the size of the dataset, we have to partially load it during preprocessing. Thus, there is a small chance every 100,000 records that a discussion is marked as a false negative and a part of it gets discarded.
     - We only include English comments in the final dataset. We use a small, efficient library (`py3langid`) for language recognition, due to the large size of Wikiconv. We include every comment that is English with a confidence score of more than 75%. This can be trivially tuned in the `scripts/wikiconv.py` file. Non-english comments are discarded *before* selecting valid discussions (see point above).
-- In WikiDisputes, we infer facilitative actions by whether the comment belongs in any of the following categories:
+- In wikiTactics, we infer facilitative actions by whether the comment belongs in any of the following categories:
     - Asking questions
     - Coordinating edits
     - Providing clarification
@@ -85,6 +88,7 @@ bash master.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 fora | ts %
     - DH6: Refutation of opponent's argument (with evidence or reasoning)
     - DH5: Counterargument with new evidence / reasoning
     - DH7: Refuting the central point
+- In WikiDisputes we mark a discussion as escalated when the derailement value is in the 60th upper percentile 
 - In UMOD, facilitative actions are marked as a gradient from 0 (no facilitation) to 1 (full facilitation). We adopt a threshold of 0.75 to consider an action as facilitative, with more than 50% annotator agreement (measured as entropy in the original dataset).
 - In IQ2, we remove verbal linguistic markers ("...", "uh,").
 

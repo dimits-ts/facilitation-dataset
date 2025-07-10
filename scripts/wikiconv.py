@@ -77,6 +77,12 @@ def add_notes(df):
 
 def add_meta_cols(df):
     df["is_moderator"] = False
+    df["moderation_supported"] = False
+    # TODO: Maybe infer esclation from toxicity using statistical relationships
+    # between toxicity and escalation from wikitactics
+    df["escalated"] = False
+    df["escalation_supported"] = False
+
     df["dataset"] = "wikiconv"
     return df
 

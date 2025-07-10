@@ -31,13 +31,19 @@ def main():
     df.paragraphs = df.paragraphs.str.replace("...", "")
 
     df["is_moderator"] = df.speakertype.apply(lambda x: x in ["mod", "host"])
+    df["moderation_supported"] = True
+
     df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
     df["message_id"] = df.apply(
-        lambda row: f"iq2-{row.get("conv_id")}-{row.get("speaker_turn")}",
+        lambda row: f"iq2-{row.get('conv_id')}-{row.get('speaker_turn')}",
         axis=1,
     )
     df["dataset"] = "iq2"
     df["notes"] = None
+
+    df["escalated"] = False
+    df["escalation_supported"] = False
+    
     df["reply_to"] = util.preprocessing.assign_reply_to(
         df,
         conv_id_col="conv_id",
