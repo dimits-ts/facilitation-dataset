@@ -34,7 +34,7 @@ def main():
 
 
 def process_dataset(df):
-    df = df.dropna(subset=["text"])
+    df = df[df.text.apply(lambda x: x.strip()).apply(len) > 0]
     # masked IP addresses are tracked to the same user_id
     # (found in wikiconv-20**/speakers.json). Thus, to be safe, we consider
     # them as separate, unique users
@@ -45,7 +45,9 @@ def process_dataset(df):
     )
 
     tqdm.pandas(desc="Detecting language", leave=False)
+    print(df.text)
     df = df[df.text.astype(str).progress_apply(is_english)]
+    print(df.text)
 
     # Filter out conversations with only one user commenting
     valid_discussion_ids = util.preprocessing.get_valid_discussion_ids(
@@ -112,7 +114,7 @@ def is_english(text: str) -> bool:
     """
     try:
         lang, prob = langid.classify(text)
-        return lang == "en" and prob >= 0.7
+        return lang == "en"
     except Exception:
         return False
 
