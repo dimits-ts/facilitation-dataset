@@ -79,7 +79,7 @@ def main(args):
     )
 
     print("Loading dataset for inference...")
-    df = pd.read_csv(source_dataset_path).head(100)
+    df = pd.read_csv(source_dataset_path)
 
     print("Processing dataset …")
     annotated_df = util.classification.preprocess_dataset(df)
