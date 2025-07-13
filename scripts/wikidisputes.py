@@ -37,10 +37,11 @@ def main():
     df = df[df["conversation.type"] == "original"]
     df = df[df["conversation.text"].apply(len) > 2]
 
-    df_duplicate = df[df.duplicated('conversation.conv_id', keep=False)]
-    df_dupicate_convs = set(df_duplicate["conversation.conv_id"].unique())
-    df = df[~df["conversation.conv_id"].isin(df_dupicate_convs)]
-    print(f"Removed {len(df_duplicate)} discussions with duplicate ids")
+    # remove duplicate comments
+    df_duplicate = df[df.duplicated('conversation.id', keep=False)]
+    df_dupicate_convs = set(df_duplicate["conversation.id"].unique())
+    df = df[~df["conversation.id"].isin(df_dupicate_convs)]
+    print(f"Removed {len(df_duplicate)} comments with duplicate ids.")
 
     df["is_moderator"] = df["conversation.user"] == df["dispute.mediator"]
     df["moderation_supported"] = False
