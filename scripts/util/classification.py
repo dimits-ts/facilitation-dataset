@@ -6,6 +6,7 @@ import torch
 import torch.nn
 import transformers
 import datasets
+from tqdm.auto import tqdm
 from sklearn.model_selection import train_test_split
 import sklearn.metrics
 
@@ -96,9 +97,10 @@ def load_trained_model_tokenizer(model_dir: Path):
 
 
 def preprocess_dataset(
-    df: pd.DataFrame, dataset_ls: list[str]
+    df: pd.DataFrame, dataset_ls: list[str] | None = None
 ) -> pd.DataFrame:
-    df = df[df.dataset.isin(dataset_ls)]
+    if dataset_ls is not None:
+        df = df[df.dataset.isin(dataset_ls)]
     df = df.reset_index()
     df.is_moderator = df.is_moderator.astype(float)
     df.text = df.text.astype(str)
@@ -148,7 +150,7 @@ def _build_discussion_dataset(
     # Map message_id to row for quick lookup
     id_to_row = df.set_index("message_id").to_dict("index")
 
-    for _, row in df.iterrows():
+    for _, row in tqdm(df.iterrows(), desc="Formatting dataset"):
         current_comment = row["text"]
         reply_to_id = row["reply_to"]
 
