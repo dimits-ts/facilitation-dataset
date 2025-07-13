@@ -37,12 +37,18 @@ def main():
     df = df[df["conversation.type"] == "original"]
     df = df[df["conversation.text"].apply(len) > 2]
 
+    df_duplicate = df[df.duplicated('conversation.conv_id', keep=False)]
+    df_dupicate_convs = set(df_duplicate["conversation.conv_id"].unique())
+    df = df[~df["conversation.conv_id"].isin(df_dupicate_convs)]
+    print(f"Removed {len(df_duplicate)} discussions with duplicate ids")
+
     df["is_moderator"] = df["conversation.user"] == df["dispute.mediator"]
     df["moderation_supported"] = False
     
     df["dataset"] = "wikidisputes"
 
     df["conversation.id"] = "wikidisputes-" + df["conversation.id"]
+    df["conversation.reply_to"] = "wikidisputes-" + df["conversation.reply_to"]
     # duplicate values in message_id
     df = df.rename(
         columns={

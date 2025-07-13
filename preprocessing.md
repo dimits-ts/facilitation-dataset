@@ -3,6 +3,7 @@
 ### General
 - We exclude comments with no text
 - We remove discussions with less than two distinct participants
+- We remove discussions which are common between wikitactics and wikiconv as well as wikidisputes and wikiconv. There may be duplicate discussions between wikidisputes and wikitactics, but we allow them since they feature complementary information
 
 ### Wikiconv
 The Wikiconv corpus does not contain information about which user is a moderator/facilitator. Therefore, all comments relating to Wikiconv are tagged as non-moderators

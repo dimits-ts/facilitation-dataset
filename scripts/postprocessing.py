@@ -41,10 +41,10 @@ def find_duplicate_comments(
         f"(original dataset: '{original_dataset}' -> "
         f"duplicate dataset: '{duplicate_dataset}')..."
     )
-    original_dataset_df = df[df["dataset"] == original_dataset]
-    duplicate_dataset_df = df[df["dataset"] == duplicate_dataset]
+    original_dataset_df = df[df.dataset == original_dataset]
+    duplicate_dataset_df = df[df.dataset == duplicate_dataset]
 
-    original_keys = set(original_dataset_df["conv_id"])
+    original_keys = set(original_dataset_df.conv_id)
     duplicate_mask = duplicate_dataset_df.conv_id.apply(
         lambda x: x in original_keys
     )
@@ -69,8 +69,16 @@ def discard_duplicates(
     return df
 
 
+def discard_empty_comments(df: pd.DataFrame) -> pd.DataFrame:
+    initial_size = len(df)
+    df = df[df.text.astype(str).apply(lambda x: x.strip()).apply(len) != 0]
+    print(f"Removed {initial_size - len(df)} empty comments.")
+    return df
+
+
 def main():
     df = get_unified_dataset(INPUT_DIR)
+
     if (
         "wikiconv" in df.dataset.unique()
         and "wikitactics" in df.dataset.unique()
@@ -91,6 +99,7 @@ def main():
             duplicate_dataset="wikiconv",
         )
 
+    df = discard_empty_comments(df)
     df = discard_one_man_convs(df)
     df.to_csv(OUTPUT_PATH, index=False)
     print(f"Dataset exported as {OUTPUT_PATH}")

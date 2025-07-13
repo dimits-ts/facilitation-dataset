@@ -33,8 +33,10 @@ def main():
             first_chunk = False
 
 
-def process_dataset(df):
-    df = df[df.text.apply(lambda x: x.strip()).apply(len) > 0]
+def process_dataset(full_df):
+    df = full_df.loc[
+        full_df.text.apply(lambda x: x.strip()).apply(len) > 0
+    ].copy()
     # masked IP addresses are tracked to the same user_id
     # (found in wikiconv-20**/speakers.json). Thus, to be safe, we consider
     # them as separate, unique users
@@ -45,9 +47,7 @@ def process_dataset(df):
     )
 
     tqdm.pandas(desc="Detecting language", leave=False)
-    print(df.text)
     df = df[df.text.astype(str).progress_apply(is_english)]
-    print(df.text)
 
     # Filter out conversations with only one user commenting
     valid_discussion_ids = util.preprocessing.get_valid_discussion_ids(
@@ -95,6 +95,7 @@ def conform_to_pefk(df):
             "conversation_id": "conv_id",
             "reply-to": "reply_to",
             "id": "message_id",
+            "text": "text",
             "speaker": "user",
             "meta.toxicity": "toxicity",
             "meta.sever_toxicity": "sever_toxicity",
