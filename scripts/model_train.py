@@ -1,5 +1,6 @@
 from pathlib import Path
 import argparse
+import random
 
 import pandas as pd
 import torch
@@ -33,6 +34,76 @@ class WeightedLossTrainer(transformers.Trainer):
         )
         loss = loss_fct(logits, labels)
         return (loss, outputs) if return_outputs else loss
+
+
+class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
+    """
+    Yields lists of indices such that items inside a batch have similar
+    sequence length.  That keeps padding - and thus compute - to a minimum.
+
+    • Batches are *shuffled* every epoch, but order inside each batch
+      is irrelevant (Trainer will not re-shuffle).
+    • Works for any dataset that yields a dict with 'input_ids'.
+    """
+
+    def __init__(self, dataset, batch_size, drop_last: bool = False):
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.drop_last = drop_last
+
+        # ---- pre-compute lengths once ----
+        self.lengths = [
+            len(ids) for ids in dataset["input_ids"]
+        ]  # HF Dataset returns python lists
+        # sort indices by length
+        self.sorted_indices = sorted(
+            range(len(dataset)), key=self.lengths.__getitem__
+        )
+
+    def __iter__(self):
+        # -- bucketed indices, then shuffle buckets --
+        batches = [
+            self.sorted_indices[i : i + self.batch_size]
+            for i in range(0, len(self.sorted_indices), self.batch_size)
+        ]
+        if self.drop_last and len(batches[-1]) < self.batch_size:
+            batches = batches[:-1]
+
+        random.shuffle(batches)  # different order every epoch
+        for b in batches:
+            yield b
+
+    def __len__(self):
+        full, rest = divmod(len(self.sorted_indices), self.batch_size)
+        return full if (rest == 0 or self.drop_last) else full + 1
+
+
+class BucketedTrainer(WeightedLossTrainer):
+    """
+    Overrides get_train_dataloader() so Trainer uses our bucketed sampler.
+    """
+
+    def __init__(self, bucket_batch_size, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.bucket_batch_size = bucket_batch_size
+
+    def get_train_dataloader(self) -> torch.utils.data.DataLoader:
+        if self.train_dataset is None:
+            raise ValueError("Trainer: training dataset must be provided")
+
+        sampler = SmartBucketBatchSampler(
+            self.train_dataset,
+            batch_size=self.bucket_batch_size,
+            drop_last=False,
+        )
+
+        return torch.utils.data.DataLoader(
+            self.train_dataset,
+            batch_sampler=sampler,
+            collate_fn=self.data_collator,  # provided by base Trainer
+            num_workers=self.args.dataloader_num_workers,
+            pin_memory=self.args.dataloader_pin_memory,
+        )
 
 
 class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
@@ -90,7 +161,6 @@ class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
         return control
 
 
-
 def train_model(
     model,
     tokenizer,
@@ -126,7 +196,7 @@ def train_model(
         report_to="tensorboard",
     )
 
-    early_stopping = util.classification.EarlyStoppingWithWarmupStepsCallback(
+    early_stopping = EarlyStoppingWithWarmupStepsCallback(
         warmup_steps=EARLY_STOP_WARMUP,
         patience=EARLY_STOP_PATIENCE,
         metric_name="eval_loss",
@@ -137,7 +207,8 @@ def train_model(
         tokenizer, padding=True
     )
 
-    trainer = util.classification.WeightedLossTrainer(
+    trainer = BucketedTrainer(
+        bucket_batch_size=util.classification.BATCH_SIZE,
         pos_weight=pos_weight,
         model=model,
         args=training_args,
@@ -145,7 +216,7 @@ def train_model(
         eval_dataset=val_dat,
         compute_metrics=util.classification.compute_metrics,
         callbacks=[early_stopping],
-        **{"data_collator": data_collator}
+        **{"data_collator": data_collator},
     )
 
     checkpoints_exist = finetuned_model_dir.is_dir()
@@ -208,7 +279,7 @@ def main(args) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dataset selection")
     parser.add_argument(
-        "dataset", type=str, help="Comma-separated list of datasets"
+        "datasets", type=str, help="Comma-separated list of datasets"
     )
     parser.add_argument(
         "--output_dir",
