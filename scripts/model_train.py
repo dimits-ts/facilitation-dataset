@@ -2,8 +2,8 @@ from pathlib import Path
 import argparse
 
 import pandas as pd
+import torch
 import transformers
-
 
 import util.classification
 
@@ -16,6 +16,79 @@ EARLY_STOP_THRESHOLD = 0.001
 EARLY_STOP_PATIENCE = 5
 FINETUNE_ONLY_HEAD = True
 MODEL = "google/bigbird-roberta-base"
+
+
+class WeightedLossTrainer(transformers.Trainer):
+    def __init__(self, pos_weight, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.pos_weight = torch.tensor([pos_weight])
+
+    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
+        labels = inputs.get("labels").float()
+        outputs = model(**inputs)
+        logits = outputs.get("logits").view(-1)
+        labels = labels.view(-1)
+        loss_fct = torch.nn.BCEWithLogitsLoss(
+            pos_weight=self.pos_weight.to(logits.device)
+        )
+        loss = loss_fct(logits, labels)
+        return (loss, outputs) if return_outputs else loss
+
+
+class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
+    def __init__(
+        self,
+        warmup_steps=500,
+        patience=3,
+        threshold=0.0,
+        metric_name="eval_loss",
+        greater_is_better=False,
+    ):
+        self.warmup_steps = warmup_steps
+        self.patience = patience
+        self.threshold = threshold
+        self.metric_name = metric_name
+        self.greater_is_better = greater_is_better
+        self.best_metric = None
+        self.wait_count = 0
+
+    def on_evaluate(
+        self,
+        args,
+        state: transformers.TrainerState,
+        control: transformers.TrainerControl,
+        metrics,
+        **kwargs,
+    ):
+        current_step = state.global_step
+
+        if current_step < self.warmup_steps:
+            return control  # still warming up
+
+        metric_value = metrics.get(self.metric_name)
+        if metric_value is None:
+            return control  # metric not available yet
+
+        if self.best_metric is None:
+            self.best_metric = metric_value
+            return control
+
+        operator = (
+            (lambda a, b: a > b + self.threshold)
+            if self.greater_is_better
+            else (lambda a, b: a < b - self.threshold)
+        )
+
+        if operator(metric_value, self.best_metric):
+            self.best_metric = metric_value
+            self.wait_count = 0
+        else:
+            self.wait_count += 1
+            if self.wait_count >= self.patience:
+                control.should_training_stop = True
+
+        return control
+
 
 
 def train_model(

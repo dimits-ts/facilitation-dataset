@@ -1,43 +1,48 @@
+#!/usr/bin/env python3
 """
-Infer moderator probabilities and append them to the dataset.
+Infer moderator probabilities and append **full dataframe batches** to disk.
 
 After each mini-batch the script
-    1. writes the fresh probabilities into the in-memory DataFrame, and
-    2. overwrites --destination_dataset_path with the updated DataFrame.
+    1. computes fresh probabilities,
+    2. inserts them into the corresponding slice of the in-memory DataFrame, 
+    3. appends **that entire slice** (all original columns + the new
+       ``moderator_prob`` column) to ``--destination_dataset_path``.
 
-That gives a crash-resumable workflow with minimal RAM use
-(no long lists of logits kept in memory).
+This preserves crash-resumability with minimal RAM use (no long lists of logits
+kept in memory) while letting downstream processes stream-read the growing CSV.
 """
+from __future__ import annotations
 
 from pathlib import Path
 import argparse
+from typing import List
 
 import pandas as pd
 import torch
+import transformers
 from tqdm.auto import tqdm
 
-import util.classification as uc
+import util.classification
 
 
-# ───────────────────────────────────── Dataset & DataLoader ─────────────────
+# ───────────────────────────────────── Dataset & DataLoader ──────────────────
 class _DiscussionDataset(torch.utils.data.Dataset):
-    """
-    Map-style dataset that, on-the-fly, turns a dataframe row into the
-    combined  <CONTEXT> ... <COMMENT> ...  string required by the model.
+    """Map-style dataset turning a dataframe row into the combined
+    ``<CONTEXT> … <COMMENT> …`` string required by the model (done on-the-fly).
     """
 
     def __init__(self, df: pd.DataFrame):
         self.df = df.reset_index(drop=True)
 
-        # message_id → text lookup for fast context fetch
+        # id -> text lookup for fast context fetch
         self._id2text = self.df.set_index("message_id")["text"].to_dict()
         self._texts = self.df["text"].tolist()
         self._reply_to = self.df["reply_to"].tolist()
 
-    def __len__(self):
+    def __len__(self) -> int:  # type: ignore[override]
         return len(self._texts)
 
-    def __getitem__(self, idx: int) -> str:
+    def __getitem__(self, idx: int) -> str:  # type: ignore[override]
         context = ""
         r_id = self._reply_to[idx]
         if pd.notna(r_id) and r_id in self._id2text:
@@ -45,22 +50,25 @@ class _DiscussionDataset(torch.utils.data.Dataset):
         return f"<CONTEXT> {context} <COMMENT> {self._texts[idx]}"
 
 
-def _build_dataloader(df: pd.DataFrame, tokenizer):
+def _build_dataloader(
+    df: pd.DataFrame, tokenizer
+) -> torch.utils.data.DataLoader:
     """Tokenise batches on-the-fly; keeps memory footprint tiny."""
+
     dataset = _DiscussionDataset(df)
 
-    def collate_fn(batch_texts):
+    def collate_fn(batch_texts: List[str]):
         return tokenizer(
             batch_texts,
             padding="longest",
             truncation=True,
-            max_length=uc.MAX_LENGTH,
+            max_length=util.classification.MAX_LENGTH,
             return_tensors="pt",
         )
 
     return torch.utils.data.DataLoader(
         dataset,
-        batch_size=uc.BATCH_SIZE - 2,  # a little headroom
+        batch_size=util.classification.BATCH_SIZE - 2,  # a little headroom
         shuffle=False,  # preserve order
         collate_fn=collate_fn,
         num_workers=6,
@@ -68,114 +76,135 @@ def _build_dataloader(df: pd.DataFrame, tokenizer):
     )
 
 
-# ───────────────────────────────────── Inference loop ───────────────────────
-def infer_and_stream(
+# ─────────────────────────────────────── Helpers ─────────────────────────────
+
+
+def load_trained_model_tokenizer(model_dir: Path):
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        model_dir
+    )
+    tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
+    return model, tokenizer
+
+
+def _append_batch_to_csv(
+    df_batch: pd.DataFrame, out_path: Path, *, first_batch: bool
+) -> None:
+    """Append a dataframe slice to ``out_path``.
+
+    Header is written only on the first batch so that the final file is a valid
+    CSV concatenation of all batches.
+    """
+    mode = "w" if first_batch else "a"
+    df_batch.to_csv(out_path, mode=mode, header=first_batch, index=False)
+
+
+# ───────────────────────────────────── Inference loop ────────────────────────
+
+
+def _infer(model, device: str, batch):
+    batch = {k: v.to(device, non_blocking=True) for k, v in batch.items()}
+    probs = torch.sigmoid(model(**batch).logits.squeeze(-1)).cpu().tolist()
+    return probs
+
+
+def infer_and_append(
     annotated_df: pd.DataFrame,
-    df_full: pd.DataFrame,
     model,
     tokenizer,
-    *,
-    dest_path: Path,
-):
+    destination_dataset_path: Path,
+) -> None:
+    """Streams **full dataframe batches** (incl. ``moderator_prob``) to a CSV.
+
+    The function exits early if ``destination_dataset_path`` already exists, so
+    you can safely resume a crashed run by deleting the partially written file
+    before re-launching.
     """
-    Streams probabilities into `df_full` *and* writes the whole DataFrame
-    to `dest_path` after every batch.
-
-    df_full must contain a column called 'moderator_prob' (initialised to NaN).
-    """
-
-    # -- build a fast row-lookup table:  message_id → row-number
-    idx_map = pd.Series(df_full.index, index=df_full["message_id"]).to_dict()
-
-    # ordered ids that correspond to the DataLoader batches
-    ordered_msg_ids = annotated_df["message_id"].tolist()
+    if destination_dataset_path.exists():
+        print(f"{destination_dataset_path} already exists. Exiting ...")
+        return
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device).eval()
-    print("Starting inference on", device)
-
     dataloader = _build_dataloader(annotated_df, tokenizer)
 
     with torch.inference_mode():
         offset = 0
         for batch_idx, batch in enumerate(
-            tqdm(dataloader, desc="Running inference")
+            tqdm(dataloader, desc="Running inference", leave=False)
         ):
-            # --- model forward ------------------------------------------------
-            batch = {
-                k: v.to(device, non_blocking=True) for k, v in batch.items()
-            }
-            logits = model(**batch).logits.squeeze(-1)
-            probs = torch.sigmoid(logits).cpu().tolist()
+            # model forward ────────────────────────────────────────────────
+            probs = _infer(model, device, batch)
+            # dataframe slice for this mini-batch ─────────────────────────
+            df_batch = annotated_df.iloc[offset : offset + len(probs)].copy()
+            df_batch["moderator_prob"] = probs
 
-            # --- write probs into df_full ------------------------------------
-            ids_this_batch = ordered_msg_ids[offset:offset + len(probs)]
-            row_idx = [idx_map[mid] for mid in ids_this_batch]
-            df_full.loc[row_idx, "moderator_prob"] = probs
+            # persist to disk ─────────────────────────────────────────────
+            _append_batch_to_csv(
+                df_batch,
+                destination_dataset_path,
+                first_batch=(batch_idx == 0),
+            )
+
             offset += len(probs)
 
-            # --- save entire DataFrame after this batch ----------------------
-            df_full.to_csv(dest_path, index=False, )
 
-    print("✓ Inference complete - final dataset written to", dest_path)
+# ────────────────────────────────────────── Main ─────────────────────────────
 
 
-# ───────────────────────────────────────── Main ─────────────────────────────
-def main(args):
+def main(args: argparse.Namespace) -> None:
+    # paths ────────────────────────────────────────────────────────────────
     model_dir = Path(args.model_dir)
     src_path = Path(args.source_dataset_path)
     dst_path = Path(args.destination_dataset_path)
     dst_path.parent.mkdir(parents=True, exist_ok=True)
 
-    model, tokenizer = uc.load_trained_model_tokenizer(model_dir)
+    # model ────────────────────────────────────────────────────────────────
+    model, tokenizer = load_trained_model_tokenizer(model_dir)
 
-    print("Loading dataset for inference...")
+    # load & clean ─────────────────────────────────────────────────────────
+    print("Loading data...")
     df = pd.read_csv(src_path)
-
-    # Optional length-based sort for padding efficiency
-    df = df.sort_values(
-        by="text", key=lambda col: col.str.len(), ascending=False
-    )
-
-    # Prepare a column to hold the probabilities
-    df["moderator_prob"] = pd.NA
-
-    print("Filtering & cleaning...")
-    annotated_df = uc.preprocess_dataset(df)
+    df = df.sort_values(by="text", key=lambda c: c.str.len(), ascending=False)
+    annotated_df = util.classification.preprocess_dataset(df)
     if annotated_df.empty:
-        print("No rows match the selected datasets.")
+        print("No rows match filters - nothing to do.")
         return
 
-    infer_and_stream(
-        annotated_df,
-        df_full=df,
+    # inference ────────────────────────────────────────────────────────────
+    infer_and_append(
+        annotated_df=annotated_df,
         model=model,
         tokenizer=tokenizer,
-        dest_path=dst_path,
+        destination_dataset_path=dst_path,
     )
 
+    print("Dataset written to", dst_path)
 
-# ───────────────────────────────────────── CLI ──────────────────────────────
+
+# ────────────────────────────────────────── CLI ──────────────────────────────
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Infer facilitative comment probabilities"
+        description="Infer facilitative comment probabilities and stream the "
+        "full dataframe batches to disk."
     )
     parser.add_argument(
         "--model_dir",
         type=str,
         required=True,
-        help="Checkpoint directory for trained model",
+        help="Checkpoint directory for trained model.",
     )
     parser.add_argument(
         "--source_dataset_path",
         type=str,
         required=True,
-        help="Path to the source dataset",
+        help="Path to the source dataset (CSV).",
     )
     parser.add_argument(
         "--destination_dataset_path",
         type=str,
         required=True,
-        help="Path for the continuously updated dataset",
+        help="Path for the continuously growing output dataset (CSV).",
     )
+
     main(parser.parse_args())
