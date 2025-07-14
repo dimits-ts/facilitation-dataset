@@ -81,7 +81,7 @@ def _build_dataloader(
 
 def load_trained_model_tokenizer(model_dir: Path):
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
-        model_dir
+        model_dir, reference_compile=False,attn_implementation="eager"
     )
     tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
     return model, tokenizer
@@ -136,7 +136,7 @@ def infer_and_append(
             # model forward ────────────────────────────────────────────────
             probs = _infer(model, device, batch)
             # dataframe slice for this mini-batch ─────────────────────────
-            df_batch = annotated_df.iloc[offset : offset + len(probs)].copy()
+            df_batch = annotated_df.iloc[offset:offset + len(probs)].copy()
             df_batch["moderator_prob"] = probs
 
             # persist to disk ─────────────────────────────────────────────

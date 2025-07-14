@@ -18,7 +18,7 @@ def load_test_dataset(
 ):
     df = pd.read_csv(dataset_path)
     df = util.classification.preprocess_dataset(df, dataset_ls=dataset_ls)
-    _, _, test_dataset = util.classification.df_to_train_val_test_dataset(
+    _, _, test_dataset = util.classification.train_val_test_df(
         df, tokenizer, seed=seed, max_length=max_length
     )
     return test_dataset
