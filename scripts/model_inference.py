@@ -9,23 +9,80 @@ import argparse
 
 import pandas as pd
 import torch
-import datasets
 from tqdm.auto import tqdm
 
 import util.classification
 
 
-def infer_moderator(annotated_df: pd.DataFrame, model, tokenizer):
+class _DiscussionDataset(torch.utils.data.Dataset):
+    """
+    Map-style dataset that, on-the-fly, turns a dataframe row into
+    the combined  <CONTEXT> … <COMMENT> …  string required by the model.
+    """
+
+    def __init__(self, df: pd.DataFrame):
+        self.df = df.reset_index(drop=True)
+        # quick look‑up: message_id → text
+        self._id2text: dict[str, str] = df.set_index("message_id")[
+            "text"
+        ].to_dict()
+        self._texts = self.df["text"].tolist()
+        self._reply_to = self.df["reply_to"].tolist()
+
+    def __len__(self) -> int:
+        return len(self._texts)
+
+    def __getitem__(self, idx: int) -> str:
+        context = ""
+        r_id = self._reply_to[idx]
+        if pd.notna(r_id) and r_id in self._id2text:
+            context = self._id2text[r_id]
+        return f"<CONTEXT> {context} <COMMENT> {self._texts[idx]}"
+
+
+def _build_dataloader(
+    df: pd.DataFrame, tokenizer, batch_size: float, max_length: float
+) -> torch.util.DataLoader:
+    """
+    Returns a DataLoader that tokenises batches on-the-fly, so no giant
+    tensor object is ever kept in RAM.
+    """
+    dataset = _DiscussionDataset(df)
+
+    def collate_fn(batch_texts):
+        return tokenizer(
+            batch_texts,
+            # max_length is needed for sparse attention
+            # but it takes two orders of magnitude more to compute
+            # so I'll just take the performance hit of full attention.
+            # Most comments are short anyway
+            padding="longest",
+            truncation=True,
+            max_length=max_length,
+            return_tensors="pt",
+        )
+
+    loader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        shuffle=False,  # keep original order
+        collate_fn=collate_fn,
+        num_workers=6,
+        pin_memory=torch.cuda.is_available(),
+    )
+    return loader
+
+
+def infer_moderator(
+    annotated_df: pd.DataFrame, model, tokenizer
+) -> list[float]:
     """Run inference and return a list with one probability per row.
 
     The returned list is ordered identically to ``annotated_df``.
     """
-    df = annotated_df.copy()
+    # df = annotated_df.copy()
 
     # Build model-ready texts with <CONTEXT> / <COMMENT> markers.
-    print("Formatting dataset …")
-    input_texts, _ = util.classification._build_discussion_dataset(df)
-    df["input_text"] = input_texts
 
     # Move model to the appropriate device.
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -33,39 +90,25 @@ def infer_moderator(annotated_df: pd.DataFrame, model, tokenizer):
     model.eval()
     print("Beginning inference on device", device)
 
-    dataloader = _get_dataloader(df, tokenizer)
+    dataloader = _build_dataloader(
+        annotated_df,
+        tokenizer,
+        batch_size=util.classification.BATCH_SIZE - 2,  # just to be sure
+        max_length=util.classification.MAX_LENGTH,
+    )
 
     all_probs = []
-    with torch.no_grad():
+    with torch.inference_mode():
         for batch in tqdm(dataloader, desc="Running inference"):
-            input_ids = batch["input_ids"].to(device)
-            attention_mask = batch["attention_mask"].to(device)
-
-            outputs = model(input_ids=input_ids, attention_mask=attention_mask)
-            logits = outputs.logits.view(-1)
+            # move *entire* batch dict to GPU in one go
+            batch = {
+                k: v.to(device, non_blocking=True) for k, v in batch.items()
+            }
+            logits = model(**batch).logits.squeeze(-1)  # shape: (B,)
             probs = torch.sigmoid(logits)
             all_probs.extend(probs.cpu().tolist())
 
     return all_probs
-
-
-def _get_dataloader(df: pd.DataFrame, tokenizer):
-    """Tokenise the texts and build a simple DataLoader."""
-    dataset = datasets.Dataset.from_dict({"text": df["input_text"].tolist()})
-    dataset = dataset.map(
-        lambda x: tokenizer(
-            x["text"],
-            truncation=True,
-            padding="max_length",
-            max_length=util.classification.MAX_LENGTH,
-        ),
-        batched=True,
-    )
-    dataset.set_format(type="torch", columns=["input_ids", "attention_mask"])
-
-    return torch.utils.data.DataLoader(
-        dataset, batch_size=util.classification.BATCH_SIZE
-    )
 
 
 def main(args):
@@ -81,7 +124,7 @@ def main(args):
     print("Loading dataset for inference...")
     df = pd.read_csv(source_dataset_path)
 
-    print("Processing dataset …")
+    print("Processing dataset...")
     annotated_df = util.classification.preprocess_dataset(df)
     if annotated_df.empty:
         print("No rows match the selected datasets.")

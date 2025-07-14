@@ -142,15 +142,20 @@ def compute_metrics(eval_pred):
 
 
 def _build_discussion_dataset(
-    df: pd.DataFrame,
+    df: pd.DataFrame, verbose: bool = False
 ) -> tuple[list[str], list[str]]:
     inputs = []
     outputs = []
 
-    # Map message_id to row for quick lookup
+    print("Indexing...")
     id_to_row = df.set_index("message_id").to_dict("index")
 
-    for _, row in tqdm(df.iterrows(), desc="Formatting dataset"):
+    _iter = (
+        tqdm(df.iterrows(), desc="Formatting dataset", total=len(df))
+        if verbose
+        else df.iterrows
+    )
+    for _, row in _iter:
         current_comment = row["text"]
         reply_to_id = row["reply_to"]
 
