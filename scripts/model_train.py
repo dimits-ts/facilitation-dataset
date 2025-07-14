@@ -16,7 +16,7 @@ EARLY_STOP_WARMUP = 1000
 EARLY_STOP_THRESHOLD = 0.001
 EARLY_STOP_PATIENCE = 5
 FINETUNE_ONLY_HEAD = True
-MODEL = "google/bigbird-roberta-base"
+MODEL = "answerdotai/ModernBERT-base"
 
 
 # ───────────────────────────────── Dataset for *training* ───────────────────
@@ -93,6 +93,7 @@ class WeightedLossTrainer(transformers.Trainer):
             pos_weight=self.pos_weight.to(logits.device)
         )
         loss = loss_fct(logits, labels)
+        
         return (loss, outputs) if return_outputs else loss
 
 
@@ -283,12 +284,13 @@ def train_model(
 
 
 def load_model_tokenizer():
-    model = transformers.BigBirdForSequenceClassification.from_pretrained(
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
         MODEL,
+        reference_compile=False,attn_implementation="eager",
         num_labels=1,
         problem_type="multi_label_classification",
     )
-    tokenizer = transformers.BigBirdTokenizer.from_pretrained(
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
         MODEL,
     )
     return model, tokenizer
@@ -322,7 +324,7 @@ def main(args) -> None:
     model, tokenizer = load_model_tokenizer()
 
     print("Loading data...")
-    df = pd.read_csv(dataset_path)
+    df = pd.read_csv(dataset_path, nrows=1000)
     df = util.classification.preprocess_dataset(df, dataset_ls)
     pos_weight = (df.is_moderator == 0).sum() / (df.is_moderator == 1).sum()
 
