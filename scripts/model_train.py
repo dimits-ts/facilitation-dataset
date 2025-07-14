@@ -150,8 +150,8 @@ class BucketedTrainer(WeightedLossTrainer):
             self.train_dataset,
             batch_sampler=sampler,
             collate_fn=self.data_collator,  # provided by base Trainer
-            num_workers=self.args.dataloader_num_workers,
-            pin_memory=self.args.dataloader_pin_memory,
+            num_workers=4,
+            pin_memory=torch.cuda.is_available(),
         )
 
 
@@ -220,6 +220,7 @@ def train_model(
     pos_weight: float,
     output_dir: Path,
     logs_dir: Path,
+    collate_func,
 ):
     finetuned_model_dir = output_dir / "best_model"
     if freeze_base_model:
@@ -252,10 +253,6 @@ def train_model(
         greater_is_better=False,
     )
 
-    data_collator = transformers.DataCollatorWithPadding(
-        tokenizer, padding=True
-    )
-
     trainer = BucketedTrainer(
         bucket_batch_size=util.classification.BATCH_SIZE,
         pos_weight=pos_weight,
@@ -265,7 +262,7 @@ def train_model(
         eval_dataset=val_dat,
         compute_metrics=util.classification.compute_metrics,
         callbacks=[early_stopping],
-        **{"data_collator": data_collator},
+        data_collator=collate_fn
     )
 
     checkpoints_exist = finetuned_model_dir.is_dir()
@@ -288,6 +285,23 @@ def load_model_tokenizer():
         MODEL,
     )
     return model, tokenizer
+
+
+def collate_fn(tokenizer, batch: list[dict[str, str | float]]):
+    texts = [b["text"] for b in batch]
+    labels = torch.tensor([b["label"] for b in batch]).unsqueeze(
+        1
+    )  # shape (B,1)
+
+    enc = tokenizer(
+        texts,
+        padding="longest",
+        truncation=True,
+        max_length=util.classification.MAX_LENGTH,
+        return_tensors="pt",
+    )
+    enc["labels"] = labels
+    return enc
 
 
 def main(args) -> None:
@@ -330,6 +344,7 @@ def main(args) -> None:
         pos_weight=pos_weight,
         output_dir=output_dir,
         logs_dir=logs_dir,
+        collate_func=lambda batch: collate_fn(tokenizer, batch)
     )
 
 
