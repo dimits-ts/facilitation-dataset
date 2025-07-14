@@ -51,21 +51,13 @@ class DiscussionModerationDataset(torch.utils.data.Dataset):
         return len(self._texts)
 
     def __getitem__(self, idx):  # type: ignore[override]
-        context = ""
-        r_id = self._reply_to[idx]
-        if pd.notna(r_id) and r_id in self._id2text:
-            context = self._id2text[r_id]
-
-        concat_text = f"<CONTEXT> {context} <COMMENT> {self._texts[idx]}"
-
-        enc = self.tokenizer(
-            concat_text,
-            truncation=True,
-            max_length=self.max_length,
+        row = self.df.iloc[idx]
+        reply_to_id = row["reply_to"]
+        context = (
+            self._id2text.get(reply_to_id, "") if pd.notna(reply_to_id) else ""
         )
-        # enc is a dict of python lists: 'input_ids', 'attention_mask', …
-        enc["labels"] = self._labels[idx]  # float → BCEWithLogits
-        return enc
+        text = f"<CONTEXT> {context} <COMMENT> {row['text']}"
+        return {"text": text, "label": float(row["is_moderator"])}
 
 
 class WeightedLossTrainer(transformers.Trainer):
@@ -112,7 +104,7 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
     def __iter__(self):
         # -- bucketed indices, then shuffle buckets --
         batches = [
-            self.sorted_indices[i:i + self.batch_size]
+            self.sorted_indices[i : i + self.batch_size]
             for i in range(0, len(self.sorted_indices), self.batch_size)
         ]
         if self.drop_last and len(batches[-1]) < self.batch_size:
@@ -262,7 +254,7 @@ def train_model(
         eval_dataset=val_dat,
         compute_metrics=util.classification.compute_metrics,
         callbacks=[early_stopping],
-        data_collator=collate_fn
+        data_collator=collate_fn,
     )
 
     checkpoints_exist = finetuned_model_dir.is_dir()
@@ -305,6 +297,7 @@ def collate_fn(tokenizer, batch: list[dict[str, str | float]]):
 
 
 def main(args) -> None:
+    dataset_path = Path(args.dataset_path)
     dataset_ls = args.datasets.split(",")
     logs_dir = Path(args.logs_dir)
     output_dir = Path(args.output_dir)
@@ -313,11 +306,12 @@ def main(args) -> None:
     util.classification.set_seed(util.classification.SEED)
     model, tokenizer = load_model_tokenizer()
 
-    df = pd.read_csv("../pefk.csv")
+    print("Loading data...")
+    df = pd.read_csv(dataset_path)
     df = util.classification.preprocess_dataset(df, dataset_ls)
     pos_weight = (df.is_moderator == 0).sum() / (df.is_moderator == 1).sum()
 
-    train_df, val_df, test_df = util.classification.train_validate_test_split(
+    train_df, val_df, test_df = util.classification._train_validate_test_split(
         df,
         stratify_col="is_moderator",
         train_percent=0.7,
@@ -334,6 +328,7 @@ def main(args) -> None:
         test_df, tokenizer, util.classification.MAX_LENGTH
     )
 
+    print("Starting training...")
     train_model(
         model,
         tokenizer,
@@ -344,14 +339,23 @@ def main(args) -> None:
         pos_weight=pos_weight,
         output_dir=output_dir,
         logs_dir=logs_dir,
-        collate_func=lambda batch: collate_fn(tokenizer, batch)
+        collate_func=lambda batch: collate_fn(tokenizer, batch),
     )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Dataset selection")
     parser.add_argument(
-        "datasets", type=str, help="Comma-separated list of datasets"
+        "--datasets",
+        type=str,
+        help="Comma-separated list of datasets",
+        required=True,
+    )
+    parser.add_argument(
+        "--dataset_path",
+        type=str,
+        help="The path of the whole dataset",
+        required=True,
     )
     parser.add_argument(
         "--output_dir",
