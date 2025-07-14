@@ -42,7 +42,7 @@ class _DiscussionDataset(torch.utils.data.Dataset):
 
 def _build_dataloader(
     df: pd.DataFrame, tokenizer, batch_size: float, max_length: float
-) -> torch.util.DataLoader:
+) -> torch.utils.data.DataLoader:
     """
     Returns a DataLoader that tokenises batches on-the-fly, so no giant
     tensor object is ever kept in RAM.
@@ -123,6 +123,10 @@ def main(args):
 
     print("Loading dataset for inference...")
     df = pd.read_csv(source_dataset_path)
+    # sort by size to improve batch computation
+    df = df.sort_values(
+        by="text", key=lambda col: col.str.len(), ascending=False
+    )
 
     print("Processing dataset...")
     annotated_df = util.classification.preprocess_dataset(df)
