@@ -20,9 +20,6 @@ def main():
     print("Loading dataset to extract statistics...")
     df = pd.read_csv(INPUT_PATH)
 
-    print("Dataset sample:")
-    print(df.head())
-
     print("*" * 25)
     print("Comments per discussion:")
     print(df.groupby("conv_id").size().describe())
@@ -38,7 +35,12 @@ def main():
     print("*" * 25)
     print("Word count per comment:")
     print(
-        df.text.astype(str).apply(lambda x: x.split(" ")).apply(len).describe()
+        df.text
+        .astype(str)
+        .apply(lambda x: x.split())
+        .apply(len)
+        .astype(int)
+        .describe()
     )
 
     print("*" * 25)

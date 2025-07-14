@@ -7,6 +7,7 @@ import util.preprocessing
 
 INPUT_DIR = Path("../datasets")
 OUTPUT_PATH = Path("../pefk.csv")
+MAX_LENGTH_WORDS = 500
 
 
 def get_unified_dataset(input_dir: Path) -> pd.DataFrame:
@@ -28,7 +29,7 @@ def discard_one_man_convs(df: pd.DataFrame) -> pd.DataFrame:
     valid_ids = util.preprocessing.get_valid_discussion_ids(
         df, conv_id_col="conv_id", user_col="user"
     )
-    print(f"Keeping {len(valid_ids)} valid comments, out of {df.shape[0]}.")
+    print(f"Keeping {len(valid_ids)} valid discussions, out of {df.shape[0]}.")
     df = df[df.conv_id.isin(valid_ids)]
     return df
 
@@ -54,7 +55,6 @@ def find_duplicate_comments(
 def discard_duplicates(
     df: pd.DataFrame, original_dataset: str, duplicate_dataset: str
 ) -> pd.DataFrame:
-    print("Removing duplicate comments...")
     initial_size = len(df)
 
     keys = set(
@@ -73,13 +73,28 @@ def discard_duplicates(
 def discard_empty_comments(df: pd.DataFrame) -> pd.DataFrame:
     print("Removing empty comments...")
     initial_size = len(df)
-    df = df[df.text.astype(str).apply(lambda x: x.strip()).apply(len) != 0]
+    df = df[df.text.progress_apply(lambda x: x.strip()).apply(len) != 0]
     print(f"Removed {initial_size - len(df)} empty comments.")
     return df
 
 
+def discard_long_comments(
+    df: pd.DataFrame, max_length_words: int
+) -> pd.DataFrame:
+    print(f"Removing extremely long comments (>{max_length_words} words)...")
+    initial_size = len(df)
+    df = df[
+        df.text.progress_apply(lambda x: x.split()).apply(len)
+        <= max_length_words
+    ]
+    print(f"Removed {initial_size - len(df)} long comments.")
+    return df
+
+
 def main():
+    tqdm.pandas()
     df = get_unified_dataset(INPUT_DIR)
+    df.text = df.text.astype(str)
 
     if (
         "wikiconv" in df.dataset.unique()
@@ -101,6 +116,7 @@ def main():
             duplicate_dataset="wikiconv",
         )
 
+    df = discard_long_comments(df, max_length_words=MAX_LENGTH_WORDS)
     df = discard_empty_comments(df)
     df = discard_one_man_convs(df)
     print(f"Post-processing complete. Exporting dataset to {OUTPUT_PATH}...")

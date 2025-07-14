@@ -2,8 +2,12 @@
 
 ### General
 - We exclude comments with no text
-- We remove discussions with less than two distinct participants
-- We remove discussions which are common between wikitactics and wikiconv as well as wikidisputes and wikiconv. There may be duplicate discussions between wikidisputes and wikitactics, but we allow them since they feature complementary information
+- We exclude comments with more than 500 words
+    - Such large comments seem to be extremely low-quality ("ramblings", malformed data). 
+    - Even if they are not, the cost in RAM, VRAM and compute needed to annotate them using NN models and LLMs overshadows the information they hold
+- We exclude discussions with less than two distinct participants
+- We exclude discussions which are common between wikitactics and wikiconv as well as wikidisputes and wikiconv. 
+    - There may be duplicate discussions between wikidisputes and wikitactics, but we allow them since they feature complementary information
 
 ### Wikiconv
 The Wikiconv corpus does not contain information about which user is a moderator/facilitator. Therefore, all comments relating to Wikiconv are tagged as non-moderators
