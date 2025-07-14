@@ -138,7 +138,8 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
 
 class BucketedTrainer(WeightedLossTrainer):
     """
-    Overrides get_train_dataloader() so Trainer uses our bucketed sampler.
+    Overrides get_train_dataloader() and get_eval_dataloader()
+    so Trainer uses our bucketed sampler for train and default sampler + collate_fn for eval.
     """
 
     def __init__(self, bucket_batch_size, *args, **kwargs):
@@ -154,11 +155,25 @@ class BucketedTrainer(WeightedLossTrainer):
             batch_size=self.bucket_batch_size,
             drop_last=False,
         )
-
         return torch.utils.data.DataLoader(
             self.train_dataset,
             batch_sampler=sampler,
-            collate_fn=self.data_collator,  # provided by base Trainer
+            collate_fn=self.data_collator,
+            num_workers=4,
+            pin_memory=torch.cuda.is_available(),
+        )
+
+    def get_eval_dataloader(self, eval_dataset=None) -> torch.utils.data.DataLoader:
+        eval_dataset = eval_dataset if eval_dataset is not None else self.eval_dataset
+        if eval_dataset is None:
+            raise ValueError("Trainer: evaluation dataset must be provided")
+
+        # Use default sequential sampler for eval + your collate_fn
+        return torch.utils.data.DataLoader(
+            eval_dataset,
+            batch_size=self.bucket_batch_size,
+            shuffle=False,
+            collate_fn=self.data_collator,
             num_workers=4,
             pin_memory=torch.cuda.is_available(),
         )
@@ -241,15 +256,15 @@ def train_model(
         per_device_eval_batch_size=util.classification.BATCH_SIZE,
         num_train_epochs=EPOCHS,
         eval_strategy="steps",
-        eval_steps=int(EVAL_STEPS / GRAD_ACC_STEPS),
+        eval_steps=EVAL_STEPS,
         save_strategy="steps",
-        save_steps=int(EVAL_STEPS / GRAD_ACC_STEPS),
+        save_steps=EVAL_STEPS,
         logging_strategy="steps",
         logging_dir=logs_dir,
-        logging_steps=int(EVAL_STEPS / GRAD_ACC_STEPS),
+        logging_steps=EVAL_STEPS,
         load_best_model_at_end=True,
-        metric_for_best_model="loss",
-        greater_is_better=True,
+        metric_for_best_model="eval_loss",  # eval_loss not loss
+        greater_is_better=False,  # lower loss is better
         gradient_accumulation_steps=GRAD_ACC_STEPS,
         report_to="tensorboard",
     )
@@ -261,6 +276,9 @@ def train_model(
         greater_is_better=False,
     )
 
+    # Use huggingface DataCollatorWithPadding with tokenizer or your custom collate_fn bound with tokenizer
+    data_collator = lambda batch: collate_fn(tokenizer, batch)
+
     trainer = BucketedTrainer(
         bucket_batch_size=util.classification.BATCH_SIZE,
         pos_weight=pos_weight,
@@ -270,17 +288,18 @@ def train_model(
         eval_dataset=val_dat,
         compute_metrics=util.classification.compute_metrics,
         callbacks=[early_stopping],
-        data_collator=lambda batch: collate_fn(tokenizer, batch),
+        data_collator=data_collator,
     )
 
-    checkpoints_exist = finetuned_model_dir.is_dir()
-    trainer.train(resume_from_checkpoint=checkpoints_exist)
+    checkpoint = finetuned_model_dir if finetuned_model_dir.is_dir() else None
+    trainer.train(resume_from_checkpoint=checkpoint)
 
     results = trainer.evaluate(eval_dataset=test_dat)
     print(results)
 
     trainer.save_model(finetuned_model_dir)
     tokenizer.save_pretrained(finetuned_model_dir)
+
 
 
 def load_model_tokenizer():
@@ -324,7 +343,7 @@ def main(args) -> None:
     model, tokenizer = load_model_tokenizer()
 
     print("Loading data...")
-    df = pd.read_csv(dataset_path, nrows=1000)
+    df = pd.read_csv(dataset_path)
     df = util.classification.preprocess_dataset(df, dataset_ls)
     pos_weight = (df.is_moderator == 0).sum() / (df.is_moderator == 1).sum()
 
