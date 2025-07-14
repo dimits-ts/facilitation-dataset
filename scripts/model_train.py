@@ -46,6 +46,25 @@ class DiscussionModerationDataset(torch.utils.data.Dataset):
         self._reply_to = self.df["reply_to"].tolist()
         self._labels = self.df["is_moderator"].astype(float).tolist()
 
+        # pre-compute lengths, since the text will be tokenized later
+        self._lengths = []
+        for txt, rep_id in zip(self._texts, self._reply_to):
+            ctx = self._id2text.get(rep_id, "") if pd.notna(rep_id) else ""
+            seq = f"<CONTEXT> {ctx} <COMMENT> {txt}"
+            # length *after* adding special tokens, truncation etc.
+            n_tokens = len(
+                self.tokenizer.encode(
+                    seq,
+                    add_special_tokens=True,
+                    truncation=True,
+                    max_length=max_length,
+                )
+            )
+            self._lengths.append(n_tokens)
+
+    def length(self, idx: int) -> int:
+        return self._lengths[idx]
+
     # ----------------------------------------------------------------- magic
     def __len__(self):  # type: ignore[override]
         return len(self._texts)
@@ -92,11 +111,8 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
         self.batch_size = batch_size
         self.drop_last = drop_last
 
-        # ---- pre-compute lengths once ----
-        self.lengths = [
-            len(ids) for ids in dataset["input_ids"]
-        ]  # HF Dataset returns python lists
-        # sort indices by length
+        # just ask the dataset
+        self.lengths = [dataset.length(i) for i in range(len(dataset))]
         self.sorted_indices = sorted(
             range(len(dataset)), key=self.lengths.__getitem__
         )
@@ -104,7 +120,7 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
     def __iter__(self):
         # -- bucketed indices, then shuffle buckets --
         batches = [
-            self.sorted_indices[i : i + self.batch_size]
+            self.sorted_indices[i:i + self.batch_size]
             for i in range(0, len(self.sorted_indices), self.batch_size)
         ]
         if self.drop_last and len(batches[-1]) < self.batch_size:
@@ -212,7 +228,6 @@ def train_model(
     pos_weight: float,
     output_dir: Path,
     logs_dir: Path,
-    collate_func,
 ):
     finetuned_model_dir = output_dir / "best_model"
     if freeze_base_model:
@@ -254,7 +269,7 @@ def train_model(
         eval_dataset=val_dat,
         compute_metrics=util.classification.compute_metrics,
         callbacks=[early_stopping],
-        data_collator=collate_fn,
+        data_collator=lambda batch: collate_fn(tokenizer, batch),
     )
 
     checkpoints_exist = finetuned_model_dir.is_dir()
@@ -339,7 +354,6 @@ def main(args) -> None:
         pos_weight=pos_weight,
         output_dir=output_dir,
         logs_dir=logs_dir,
-        collate_func=lambda batch: collate_fn(tokenizer, batch),
     )
 
 
