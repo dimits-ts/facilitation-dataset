@@ -54,7 +54,7 @@ def main():
         ),
         axis=1,
     )
-    df["moderation_supported"] = False
+    df["moderation_supported"] = True
 
     df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
     # make sure message_id is unique across discussions

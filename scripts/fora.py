@@ -44,7 +44,7 @@ def main():
         df["dataset"] = "fora"
         df["escalated"] = False
         df["escalation_supported"] = False
-        df["moderation_supported"] = False
+        df["moderation_supported"] = True
 
         df = df.rename(
             columns={
