@@ -1,7 +1,12 @@
-"""Infer moderator probabilities and append them to the dataset.
+"""
+Infer moderator probabilities and append them to the dataset.
 
-This variant keeps the raw sigmoid probabilities for every message
-instead of thresholding them to 0/1 and selecting rows with 1s.
+After each mini-batch the script
+    1. writes the fresh probabilities into the in-memory DataFrame, and
+    2. overwrites --destination_dataset_path with the updated DataFrame.
+
+That gives a crash-resumable workflow with minimal RAM use
+(no long lists of logits kept in memory).
 """
 
 from pathlib import Path
@@ -11,25 +16,25 @@ import pandas as pd
 import torch
 from tqdm.auto import tqdm
 
-import util.classification
+import util.classification as uc
 
 
+# ───────────────────────────────────── Dataset & DataLoader ─────────────────
 class _DiscussionDataset(torch.utils.data.Dataset):
     """
-    Map-style dataset that, on-the-fly, turns a dataframe row into
-    the combined  <CONTEXT> … <COMMENT> …  string required by the model.
+    Map-style dataset that, on-the-fly, turns a dataframe row into the
+    combined  <CONTEXT> ... <COMMENT> ...  string required by the model.
     """
 
     def __init__(self, df: pd.DataFrame):
         self.df = df.reset_index(drop=True)
-        # quick look‑up: message_id → text
-        self._id2text: dict[str, str] = df.set_index("message_id")[
-            "text"
-        ].to_dict()
+
+        # message_id → text lookup for fast context fetch
+        self._id2text = self.df.set_index("message_id")["text"].to_dict()
         self._texts = self.df["text"].tolist()
         self._reply_to = self.df["reply_to"].tolist()
 
-    def __len__(self) -> int:
+    def __len__(self):
         return len(self._texts)
 
     def __getitem__(self, idx: int) -> str:
@@ -40,114 +45,117 @@ class _DiscussionDataset(torch.utils.data.Dataset):
         return f"<CONTEXT> {context} <COMMENT> {self._texts[idx]}"
 
 
-def _build_dataloader(
-    df: pd.DataFrame, tokenizer, batch_size: float, max_length: float
-) -> torch.utils.data.DataLoader:
-    """
-    Returns a DataLoader that tokenises batches on-the-fly, so no giant
-    tensor object is ever kept in RAM.
-    """
+def _build_dataloader(df: pd.DataFrame, tokenizer):
+    """Tokenise batches on-the-fly; keeps memory footprint tiny."""
     dataset = _DiscussionDataset(df)
 
     def collate_fn(batch_texts):
         return tokenizer(
             batch_texts,
-            # max_length is needed for sparse attention
-            # but it takes two orders of magnitude more to compute
-            # so I'll just take the performance hit of full attention.
-            # Most comments are short anyway
             padding="longest",
             truncation=True,
-            max_length=max_length,
+            max_length=uc.MAX_LENGTH,
             return_tensors="pt",
         )
 
-    loader = torch.utils.data.DataLoader(
+    return torch.utils.data.DataLoader(
         dataset,
-        batch_size=batch_size,
-        shuffle=False,  # keep original order
+        batch_size=uc.BATCH_SIZE - 2,  # a little headroom
+        shuffle=False,  # preserve order
         collate_fn=collate_fn,
         num_workers=6,
         pin_memory=torch.cuda.is_available(),
     )
-    return loader
 
 
-def infer_moderator(
-    annotated_df: pd.DataFrame, model, tokenizer
-) -> list[float]:
-    """Run inference and return a list with one probability per row.
-
-    The returned list is ordered identically to ``annotated_df``.
+# ───────────────────────────────────── Inference loop ───────────────────────
+def infer_and_stream(
+    annotated_df: pd.DataFrame,
+    df_full: pd.DataFrame,
+    model,
+    tokenizer,
+    *,
+    dest_path: Path,
+):
     """
-    # df = annotated_df.copy()
+    Streams probabilities into `df_full` *and* writes the whole DataFrame
+    to `dest_path` after every batch.
 
-    # Build model-ready texts with <CONTEXT> / <COMMENT> markers.
+    df_full must contain a column called 'moderator_prob' (initialised to NaN).
+    """
 
-    # Move model to the appropriate device.
+    # -- build a fast row-lookup table:  message_id → row-number
+    idx_map = pd.Series(df_full.index, index=df_full["message_id"]).to_dict()
+
+    # ordered ids that correspond to the DataLoader batches
+    ordered_msg_ids = annotated_df["message_id"].tolist()
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    model.eval()
-    print("Beginning inference on device", device)
+    model.to(device).eval()
+    print("Starting inference on", device)
 
-    dataloader = _build_dataloader(
-        annotated_df,
-        tokenizer,
-        batch_size=util.classification.BATCH_SIZE - 2,  # just to be sure
-        max_length=util.classification.MAX_LENGTH,
-    )
+    dataloader = _build_dataloader(annotated_df, tokenizer)
 
-    all_probs = []
     with torch.inference_mode():
-        for batch in tqdm(dataloader, desc="Running inference"):
-            # move *entire* batch dict to GPU in one go
+        offset = 0
+        for batch_idx, batch in enumerate(
+            tqdm(dataloader, desc="Running inference")
+        ):
+            # --- model forward ------------------------------------------------
             batch = {
                 k: v.to(device, non_blocking=True) for k, v in batch.items()
             }
-            logits = model(**batch).logits.squeeze(-1)  # shape: (B,)
-            probs = torch.sigmoid(logits)
-            all_probs.extend(probs.cpu().tolist())
+            logits = model(**batch).logits.squeeze(-1)
+            probs = torch.sigmoid(logits).cpu().tolist()
 
-    return all_probs
+            # --- write probs into df_full ------------------------------------
+            ids_this_batch = ordered_msg_ids[offset:offset + len(probs)]
+            row_idx = [idx_map[mid] for mid in ids_this_batch]
+            df_full.loc[row_idx, "moderator_prob"] = probs
+            offset += len(probs)
+
+            # --- save entire DataFrame after this batch ----------------------
+            df_full.to_csv(dest_path, index=False, )
+
+    print("✓ Inference complete - final dataset written to", dest_path)
 
 
+# ───────────────────────────────────────── Main ─────────────────────────────
 def main(args):
     model_dir = Path(args.model_dir)
-    source_dataset_path = Path(args.source_dataset_path)
-    destination_dataset_path = Path(args.destination_dataset_path)
-    destination_dataset_path.parent.mkdir(parents=True, exist_ok=True)
+    src_path = Path(args.source_dataset_path)
+    dst_path = Path(args.destination_dataset_path)
+    dst_path.parent.mkdir(parents=True, exist_ok=True)
 
-    model, tokenizer = util.classification.load_trained_model_tokenizer(
-        model_dir
-    )
+    model, tokenizer = uc.load_trained_model_tokenizer(model_dir)
 
     print("Loading dataset for inference...")
-    df = pd.read_csv(source_dataset_path)
-    # sort by size to improve batch computation
+    df = pd.read_csv(src_path)
+
+    # Optional length-based sort for padding efficiency
     df = df.sort_values(
         by="text", key=lambda col: col.str.len(), ascending=False
     )
 
-    print("Processing dataset...")
-    annotated_df = util.classification.preprocess_dataset(df)
+    # Prepare a column to hold the probabilities
+    df["moderator_prob"] = pd.NA
+
+    print("Filtering & cleaning...")
+    annotated_df = uc.preprocess_dataset(df)
     if annotated_df.empty:
         print("No rows match the selected datasets.")
         return
 
-    moderator_probs = infer_moderator(annotated_df, model, tokenizer)
-    annotated_df["moderator_prob"] = moderator_probs
-
-    # Join probabilities back to the original DataFrame on ``message_id``
-    df = df.merge(
-        annotated_df[["message_id", "moderator_prob"]],
-        on="message_id",
-        how="left",
+    infer_and_stream(
+        annotated_df,
+        df_full=df,
+        model=model,
+        tokenizer=tokenizer,
+        dest_path=dst_path,
     )
 
-    print("Exporting dataset...")
-    df.to_csv(destination_dataset_path, index=False)
 
-
+# ───────────────────────────────────────── CLI ──────────────────────────────
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Infer facilitative comment probabilities"
@@ -162,14 +170,12 @@ if __name__ == "__main__":
         "--source_dataset_path",
         type=str,
         required=True,
-        help="Path for the source dataset",
+        help="Path to the source dataset",
     )
     parser.add_argument(
         "--destination_dataset_path",
         type=str,
         required=True,
-        help="Path for the exported dataset",
+        help="Path for the continuously updated dataset",
     )
-    args = parser.parse_args()
-
-    main(args)
+    main(parser.parse_args())
