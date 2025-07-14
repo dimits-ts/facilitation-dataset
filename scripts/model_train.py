@@ -19,6 +19,55 @@ FINETUNE_ONLY_HEAD = True
 MODEL = "google/bigbird-roberta-base"
 
 
+# ───────────────────────────────── Dataset for *training* ───────────────────
+class DiscussionModerationDataset(torch.utils.data.Dataset):
+    """
+    Map-style dataset that, on-the-fly, builds the
+    "<CONTEXT> … <COMMENT> …" sequence *and* returns the label.
+
+    • Text is tokenised lazily so no big tensor object sits in RAM.
+    • Outputs are Python lists; a DataCollatorWithPadding will
+      pad and convert to tensors batch-wise.
+    """
+
+    def __init__(
+        self,
+        df: pd.DataFrame,
+        tokenizer: transformers.PreTrainedTokenizerBase,
+        max_length: int,
+    ):
+        self.df = df.reset_index(drop=True)
+        self.tokenizer = tokenizer
+        self.max_length = max_length
+
+        # fast look-up:  message_id → raw text
+        self._id2text = self.df.set_index("message_id")["text"].to_dict()
+        self._texts = self.df["text"].tolist()
+        self._reply_to = self.df["reply_to"].tolist()
+        self._labels = self.df["is_moderator"].astype(float).tolist()
+
+    # ----------------------------------------------------------------- magic
+    def __len__(self):  # type: ignore[override]
+        return len(self._texts)
+
+    def __getitem__(self, idx):  # type: ignore[override]
+        context = ""
+        r_id = self._reply_to[idx]
+        if pd.notna(r_id) and r_id in self._id2text:
+            context = self._id2text[r_id]
+
+        concat_text = f"<CONTEXT> {context} <COMMENT> {self._texts[idx]}"
+
+        enc = self.tokenizer(
+            concat_text,
+            truncation=True,
+            max_length=self.max_length,
+        )
+        # enc is a dict of python lists: 'input_ids', 'attention_mask', …
+        enc["labels"] = self._labels[idx]  # float → BCEWithLogits
+        return enc
+
+
 class WeightedLossTrainer(transformers.Trainer):
     def __init__(self, pos_weight, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -63,7 +112,7 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
     def __iter__(self):
         # -- bucketed indices, then shuffle buckets --
         batches = [
-            self.sorted_indices[i : i + self.batch_size]
+            self.sorted_indices[i:i + self.batch_size]
             for i in range(0, len(self.sorted_indices), self.batch_size)
         ]
         if self.drop_last and len(batches[-1]) < self.batch_size:
@@ -242,7 +291,7 @@ def load_model_tokenizer():
 
 
 def main(args) -> None:
-    dataset_ls = args.dataset.split(",")
+    dataset_ls = args.datasets.split(",")
     logs_dir = Path(args.logs_dir)
     output_dir = Path(args.output_dir)
 
@@ -254,13 +303,21 @@ def main(args) -> None:
     df = util.classification.preprocess_dataset(df, dataset_ls)
     pos_weight = (df.is_moderator == 0).sum() / (df.is_moderator == 1).sum()
 
-    train_dataset, val_dataset, test_dataset = (
-        util.classification.df_to_train_val_test_dataset(
-            df,
-            tokenizer,
-            seed=util.classification.SEED,
-            max_length=util.classification.MAX_LENGTH,
-        )
+    train_df, val_df, test_df = util.classification.train_validate_test_split(
+        df,
+        stratify_col="is_moderator",
+        train_percent=0.7,
+        validate_percent=0.2,
+    )
+
+    train_dataset = DiscussionModerationDataset(
+        train_df, tokenizer, util.classification.MAX_LENGTH
+    )
+    val_dataset = DiscussionModerationDataset(
+        val_df, tokenizer, util.classification.MAX_LENGTH
+    )
+    test_dataset = DiscussionModerationDataset(
+        test_df, tokenizer, util.classification.MAX_LENGTH
     )
 
     train_model(
