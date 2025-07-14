@@ -3,9 +3,9 @@ channels:
   - defaults
   - conda-forge
 dependencies:
-  - python
+  - python>=3.13
   - pandas
-  - numpy<2.0
+  - numpy
   - tqdm
   - openpyxl
   - moreutils
@@ -20,4 +20,3 @@ dependencies:
       - torch
       - transformers
       - tensorboard
-      - sentencepiece
