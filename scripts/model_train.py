@@ -1,6 +1,7 @@
 from pathlib import Path
 import argparse
 import random
+import re
 
 import pandas as pd
 import torch
@@ -15,6 +16,7 @@ EARLY_STOP_WARMUP = 12000
 EARLY_STOP_THRESHOLD = 0.001
 EARLY_STOP_PATIENCE = 5
 FINETUNE_ONLY_HEAD = True
+TEST_METRICS = {"loss", "accuracy", "f1"}
 MODEL = "answerdotai/ModernBERT-base"
 
 
@@ -242,8 +244,15 @@ def train_model(
     pos_weight: float,
     output_dir: Path,
     logs_dir: Path,
+    tokenizer,
 ):
-    model, tokenizer = load_model_tokenizer()
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        MODEL,
+        reference_compile=False,
+        attn_implementation="eager",
+        num_labels=1,
+        problem_type="multi_label_classification",
+    )
 
     finetuned_model_dir = output_dir / "best_model"
     if freeze_base_model:
@@ -296,66 +305,87 @@ def train_model(
     tokenizer.save_pretrained(finetuned_model_dir)
 
 
-def test_model(output_dir: Path, test_df: pd.DataFrame, tokenizer):
+def results_to_df(individual_raw: str, all_raw: str) -> pd.DataFrame:
+    # ── parse keys →   eval_<dataset>_<metric>  ──────────────────────────────
+    per_ds: dict[str, dict[str, float]] = {}
+    for k, v in individual_raw.items():
+        if not k.startswith("eval_"):
+            continue
+        _, rest = k.split("_", 1)  # drop leading 'eval_'
+        # split once from the right so dataset names with '_' are handled
+        ds, metric = rest.rsplit("_", 1)
+        if metric in TEST_METRICS:
+            per_ds.setdefault(ds, {})[metric] = v
+
+    # ── add aggregate (“ALL”) row ────────────────────────────────────────────
+    per_ds["ALL"] = {m: all_raw[f"eval_{m}"] for m in TEST_METRICS}
+
+    # ── to DataFrame, ordered columns ────────────────────────────────────────
+    df_metrics = (
+        pd.DataFrame.from_dict(per_ds, orient="index")
+        .reindex(columns=["loss", "accuracy", "f1"])  # fixed order
+        .sort_index()
+    )
+
+    return df_metrics
+
+
+def test_model(
+    output_dir: Path,
+    test_df: pd.DataFrame,
+    tokenizer: transformers.PreTrainedTokenizerBase,
+) -> pd.DataFrame:
+    """
+    Evaluate best checkpoint on each dataset and on the full test split.
+    Returns a DataFrame indexed by dataset name with columns: loss, accuracy, f1
+    """
+
+    # ── load checkpoint ───────────────────────────────────────────────────────
+    best_model_dir = output_dir / "best_model"
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
-        output_dir / "best_model",
+        best_model_dir,
         reference_compile=False,
         attn_implementation="eager",
         num_labels=1,
         problem_type="multi_label_classification",
     )
 
-    eval_datasets = {
-        name: DiscussionModerationDataset(
+    # ── build eval datasets dict ─────────────────────────────────────────────
+    def make_ds(df):
+        return DiscussionModerationDataset(
             df.reset_index(drop=True),
             tokenizer,
             util.classification.MAX_LENGTH,
         )
-        for name, df in test_df.groupby("dataset")
-    }
+
+    eval_dict = {name: make_ds(df) for name, df in test_df.groupby("dataset")}
+    full_ds = make_ds(test_df)
 
     trainer = BucketedTrainer(
         bucket_batch_size=util.classification.BATCH_SIZE,
-        pos_weight=1.0,
+        pos_weight=1.0,  # not used in eval mode
         model=model,
         args=transformers.TrainingArguments(
             output_dir=output_dir / "eval",
-            per_device_eval_batch_size=util.classification.BATCH_SIZE,
             do_train=False,
+            per_device_eval_batch_size=util.classification.BATCH_SIZE,
             disable_tqdm=True,
         ),
         train_dataset=None,
-        eval_dataset=None,  # passed directly below
+        eval_dataset=None,
         compute_metrics=util.classification.compute_metrics,
         data_collator=lambda b: collate_fn(tokenizer, b),
     )
 
-    results = trainer.evaluate(eval_dataset=eval_datasets)
-
-    print("\n=== Per-dataset test results ===")
-    for k, v in results.items():
-        print(f"{k:<25}: {v:.4f}")
-
-
-def load_model_tokenizer():
-    model = transformers.AutoModelForSequenceClassification.from_pretrained(
-        MODEL,
-        reference_compile=False,
-        attn_implementation="eager",
-        num_labels=1,
-        problem_type="multi_label_classification",
-    )
-    tokenizer = transformers.AutoTokenizer.from_pretrained(
-        MODEL,
-    )
-    return model, tokenizer
+    individual_raw = trainer.evaluate(eval_dataset=eval_dict)
+    all_raw = trainer.evaluate(eval_dataset=full_ds)
+    res_df = results_to_df(individual_raw=individual_raw,all_raw=all_raw)
+    return res_df
 
 
 def collate_fn(tokenizer, batch: list[dict[str, str | float]]):
     texts = [b["text"] for b in batch]
-    labels = torch.tensor([b["label"] for b in batch]).unsqueeze(
-        1
-    )  # shape (B,1)
+    labels = torch.tensor([b["label"] for b in batch]).unsqueeze(1)
 
     enc = tokenizer(
         texts,
@@ -375,7 +405,7 @@ def main(args) -> None:
     logs_dir = Path(args.logs_dir)
     output_dir = Path(args.output_dir)
 
-    print("Starting training with datasets: ", dataset_ls)
+    print("Selected datasets: ", dataset_ls)
     util.classification.set_seed(util.classification.SEED)
 
     print("Loading data...")
@@ -389,6 +419,7 @@ def main(args) -> None:
         train_percent=0.7,
         validate_percent=0.2,
     )
+    tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
 
     train_dataset = DiscussionModerationDataset(
         train_df, tokenizer, util.classification.MAX_LENGTH
@@ -404,21 +435,28 @@ def main(args) -> None:
         print("Starting training...")
 
         train_model(
-            model,
-            tokenizer,
             train_dataset,
             val_dataset,
+            tokenizer=tokenizer,
             freeze_base_model=FINETUNE_ONLY_HEAD,
             pos_weight=pos_weight,
             output_dir=output_dir,
             logs_dir=logs_dir,
         )
-    
+
     print("Testing...")
-    test_model(
-        output_dir=output_dir, test_df=test_df, tokenizer=tokenizer
+    res_df = test_model(
+        output_dir=output_dir,
+        test_df=test_df,
+        tokenizer=tokenizer,
     )
 
+    print("\n=== Results ===")
+    print(res_df)
+
+    logs_path = logs_dir / "res.csv"
+    res_df.to_csv(logs_path)
+    print(f"Results saved to {logs_path}")
 
 
 if __name__ == "__main__":
