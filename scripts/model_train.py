@@ -371,6 +371,7 @@ def collate_fn(tokenizer, batch: list[dict[str, str | float]]):
 def main(args) -> None:
     dataset_path = Path(args.dataset_path)
     dataset_ls = args.datasets.split(",")
+    only_test = args.only_test
     logs_dir = Path(args.logs_dir)
     output_dir = Path(args.output_dir)
 
@@ -399,21 +400,25 @@ def main(args) -> None:
         test_df, tokenizer, util.classification.MAX_LENGTH
     )
 
-    print("Starting training...")
-    """
-    train_model(
-        model,
-        tokenizer,
-        train_dataset,
-        val_dataset,
-        freeze_base_model=FINETUNE_ONLY_HEAD,
-        pos_weight=pos_weight,
-        output_dir=output_dir,
-        logs_dir=logs_dir,
-    )
-    """
+    if not only_test:
+        print("Starting training...")
+
+        train_model(
+            model,
+            tokenizer,
+            train_dataset,
+            val_dataset,
+            freeze_base_model=FINETUNE_ONLY_HEAD,
+            pos_weight=pos_weight,
+            output_dir=output_dir,
+            logs_dir=logs_dir,
+        )
+    
     print("Testing...")
-    test_model(output_dir=output_dir, test_df=test_df, tokenizer=tokenizer)
+    test_model(
+        output_dir=output_dir, test_df=test_df, tokenizer=tokenizer
+    )
+
 
 
 if __name__ == "__main__":
@@ -441,6 +446,11 @@ if __name__ == "__main__":
         type=str,
         help="Directory for training logs",
         required=True,
+    )
+    parser.add_argument(
+        "--only_test",
+        action=argparse.BooleanOptionalAction,
+        default=False,
     )
     args = parser.parse_args()
     main(args)
