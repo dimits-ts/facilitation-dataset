@@ -8,7 +8,7 @@ import sklearn.metrics
 
 SEED = 42
 MAX_LENGTH = 4096
-BATCH_SIZE = 32
+BATCH_SIZE = 48
 
 
 def preprocess_dataset(

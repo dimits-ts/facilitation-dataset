@@ -9,17 +9,15 @@ import transformers
 import util.classification
 
 
-GRAD_ACC_STEPS = 1
-EVAL_STEPS = 400
-EPOCHS = 30
-EARLY_STOP_WARMUP = 1000
+EVAL_STEPS = 4000
+EPOCHS = 120
+EARLY_STOP_WARMUP = 12000
 EARLY_STOP_THRESHOLD = 0.001
 EARLY_STOP_PATIENCE = 5
 FINETUNE_ONLY_HEAD = True
 MODEL = "answerdotai/ModernBERT-base"
 
 
-# ───────────────────────────────── Dataset for *training* ───────────────────
 class DiscussionModerationDataset(torch.utils.data.Dataset):
     """
     Map-style dataset that, on-the-fly, builds the
@@ -65,7 +63,6 @@ class DiscussionModerationDataset(torch.utils.data.Dataset):
     def length(self, idx: int) -> int:
         return self._lengths[idx]
 
-    # ----------------------------------------------------------------- magic
     def __len__(self):  # type: ignore[override]
         return len(self._texts)
 
@@ -93,7 +90,7 @@ class WeightedLossTrainer(transformers.Trainer):
             pos_weight=self.pos_weight.to(logits.device)
         )
         loss = loss_fct(logits, labels)
-        
+
         return (loss, outputs) if return_outputs else loss
 
 
@@ -121,7 +118,7 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
     def __iter__(self):
         # -- bucketed indices, then shuffle buckets --
         batches = [
-            self.sorted_indices[i:i + self.batch_size]
+            self.sorted_indices[i : i + self.batch_size]
             for i in range(0, len(self.sorted_indices), self.batch_size)
         ]
         if self.drop_last and len(batches[-1]) < self.batch_size:
@@ -163,8 +160,12 @@ class BucketedTrainer(WeightedLossTrainer):
             pin_memory=torch.cuda.is_available(),
         )
 
-    def get_eval_dataloader(self, eval_dataset=None) -> torch.utils.data.DataLoader:
-        eval_dataset = eval_dataset if eval_dataset is not None else self.eval_dataset
+    def get_eval_dataloader(
+        self, eval_dataset=None
+    ) -> torch.utils.data.DataLoader:
+        eval_dataset = (
+            eval_dataset if eval_dataset is not None else self.eval_dataset
+        )
         if eval_dataset is None:
             raise ValueError("Trainer: evaluation dataset must be provided")
 
@@ -235,16 +236,15 @@ class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
 
 
 def train_model(
-    model,
-    tokenizer,
     train_dat,
     val_dat,
-    test_dat,
     freeze_base_model: bool,
     pos_weight: float,
     output_dir: Path,
     logs_dir: Path,
 ):
+    model, tokenizer = load_model_tokenizer()
+
     finetuned_model_dir = output_dir / "best_model"
     if freeze_base_model:
         for param in model.base_model.parameters():
@@ -263,9 +263,8 @@ def train_model(
         logging_dir=logs_dir,
         logging_steps=EVAL_STEPS,
         load_best_model_at_end=True,
-        metric_for_best_model="eval_loss",  # eval_loss not loss
-        greater_is_better=False,  # lower loss is better
-        gradient_accumulation_steps=GRAD_ACC_STEPS,
+        metric_for_best_model="eval_loss",
+        greater_is_better=False,
         report_to="tensorboard",
     )
 
@@ -276,7 +275,6 @@ def train_model(
         greater_is_better=False,
     )
 
-    # Use huggingface DataCollatorWithPadding with tokenizer or your custom collate_fn bound with tokenizer
     data_collator = lambda batch: collate_fn(tokenizer, batch)
 
     trainer = BucketedTrainer(
@@ -294,18 +292,56 @@ def train_model(
     checkpoint = finetuned_model_dir if finetuned_model_dir.is_dir() else None
     trainer.train(resume_from_checkpoint=checkpoint)
 
-    results = trainer.evaluate(eval_dataset=test_dat)
-    print(results)
-
     trainer.save_model(finetuned_model_dir)
     tokenizer.save_pretrained(finetuned_model_dir)
 
+
+def test_model(output_dir: Path, test_df: pd.DataFrame, tokenizer):
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        output_dir / "best_model",
+        reference_compile=False,
+        attn_implementation="eager",
+        num_labels=1,
+        problem_type="multi_label_classification",
+    )
+
+    eval_datasets = {
+        name: DiscussionModerationDataset(
+            df.reset_index(drop=True),
+            tokenizer,
+            util.classification.MAX_LENGTH,
+        )
+        for name, df in test_df.groupby("dataset")
+    }
+
+    trainer = BucketedTrainer(
+        bucket_batch_size=util.classification.BATCH_SIZE,
+        pos_weight=1.0,
+        model=model,
+        args=transformers.TrainingArguments(
+            output_dir=output_dir / "eval",
+            per_device_eval_batch_size=util.classification.BATCH_SIZE,
+            do_train=False,
+            disable_tqdm=True,
+        ),
+        train_dataset=None,
+        eval_dataset=None,  # passed directly below
+        compute_metrics=util.classification.compute_metrics,
+        data_collator=lambda b: collate_fn(tokenizer, b),
+    )
+
+    results = trainer.evaluate(eval_dataset=eval_datasets)
+
+    print("\n=== Per-dataset test results ===")
+    for k, v in results.items():
+        print(f"{k:<25}: {v:.4f}")
 
 
 def load_model_tokenizer():
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
         MODEL,
-        reference_compile=False,attn_implementation="eager",
+        reference_compile=False,
+        attn_implementation="eager",
         num_labels=1,
         problem_type="multi_label_classification",
     )
@@ -340,7 +376,6 @@ def main(args) -> None:
 
     print("Starting training with datasets: ", dataset_ls)
     util.classification.set_seed(util.classification.SEED)
-    model, tokenizer = load_model_tokenizer()
 
     print("Loading data...")
     df = pd.read_csv(dataset_path)
@@ -365,17 +400,20 @@ def main(args) -> None:
     )
 
     print("Starting training...")
+    """
     train_model(
         model,
         tokenizer,
         train_dataset,
         val_dataset,
-        test_dataset,
         freeze_base_model=FINETUNE_ONLY_HEAD,
         pos_weight=pos_weight,
         output_dir=output_dir,
         logs_dir=logs_dir,
     )
+    """
+    print("Testing...")
+    test_model(output_dir=output_dir, test_df=test_df, tokenizer=tokenizer)
 
 
 if __name__ == "__main__":
