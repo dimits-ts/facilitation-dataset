@@ -36,16 +36,18 @@ class DiscussionModerationDataset(torch.utils.data.Dataset):
         df: pd.DataFrame,
         tokenizer: transformers.PreTrainedTokenizerBase,
         max_length: int,
+        label_column: str,
     ):
         self.df = df.reset_index(drop=True)
         self.tokenizer = tokenizer
         self.max_length = max_length
+        self.label_column = label_column
 
         # fast look-up:  message_id → raw text
         self._id2text = self.df.set_index("message_id")["text"].to_dict()
         self._texts = self.df["text"].tolist()
         self._reply_to = self.df["reply_to"].tolist()
-        self._labels = self.df["is_moderator"].astype(float).tolist()
+        self._labels = self.df[self.label_column].astype(float).tolist()
 
         # pre-compute lengths, since the text will be tokenized later
         self._lengths = []
@@ -76,7 +78,7 @@ class DiscussionModerationDataset(torch.utils.data.Dataset):
             self._id2text.get(reply_to_id, "") if pd.notna(reply_to_id) else ""
         )
         text = f"<CONTEXT> {context} <COMMENT> {row['text']}"
-        return {"text": text, "label": float(row["is_moderator"])}
+        return {"text": text, "label": float(row[self.label_column])}
 
 
 class WeightedLossTrainer(transformers.Trainer):
@@ -337,6 +339,7 @@ def test_model(
     output_dir: Path,
     test_df: pd.DataFrame,
     tokenizer: transformers.PreTrainedTokenizerBase,
+    label_column: str
 ) -> pd.DataFrame:
     """
     Evaluate best checkpoint on each dataset and on the full test split.
@@ -359,7 +362,8 @@ def test_model(
         return DiscussionModerationDataset(
             df.reset_index(drop=True),
             tokenizer,
-            util.classification.MAX_LENGTH,
+            MAX_LENGTH,
+            label_column=label_column
         )
 
     eval_dict = {name: make_ds(df) for name, df in test_df.groupby("dataset")}
@@ -395,7 +399,7 @@ def collate_fn(tokenizer, batch: list[dict[str, str | float]]):
         texts,
         padding="longest",
         truncation=True,
-        max_length=util.classification.MAX_LENGTH,
+        max_length=MAX_LENGTH,
         return_tensors="pt",
     )
     enc["labels"] = labels
@@ -408,6 +412,7 @@ def main(args) -> None:
     only_test = args.only_test
     logs_dir = Path(args.logs_dir)
     output_dir = Path(args.output_dir)
+    target_label = args.target_label
 
     print("Selected datasets: ", dataset_ls)
     util.classification.set_seed(util.classification.SEED)
@@ -415,21 +420,21 @@ def main(args) -> None:
     print("Loading data...")
     df = pd.read_csv(dataset_path)
     df = util.classification.preprocess_dataset(df, dataset_ls)
-    pos_weight = (df.is_moderator == 0).sum() / (df.is_moderator == 1).sum()
+    pos_weight = (df[target_label] == 0).sum() / (df[target_label] == 1).sum()
 
     train_df, val_df, test_df = util.classification._train_validate_test_split(
         df,
-        stratify_col="is_moderator",
+        stratify_col=target_label,
         train_percent=0.7,
         validate_percent=0.2,
     )
     tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
 
     train_dataset = DiscussionModerationDataset(
-        train_df, tokenizer, util.classification.MAX_LENGTH
+        train_df, tokenizer, MAX_LENGTH, target_label
     )
     val_dataset = DiscussionModerationDataset(
-        val_df, tokenizer, util.classification.MAX_LENGTH
+        val_df, tokenizer, MAX_LENGTH, target_label
     )
 
     if not only_test:
@@ -450,6 +455,7 @@ def main(args) -> None:
         output_dir=output_dir,
         test_df=test_df,
         tokenizer=tokenizer,
+        label_column=target_label
     )
 
     print("\n=== Results ===")
@@ -491,5 +497,13 @@ if __name__ == "__main__":
         action=argparse.BooleanOptionalAction,
         default=False,
     )
+    parser.add_argument(
+        "--target_label",
+        type=str,
+        default="is_moderator",
+        choices=["is_moderator", "escalated"],
+        help="Which column to use as the target label",
+    )
+
     args = parser.parse_args()
     main(args)
