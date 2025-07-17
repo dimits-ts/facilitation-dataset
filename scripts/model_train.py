@@ -11,6 +11,8 @@ import util.classification
 
 EVAL_STEPS = 4000
 EPOCHS = 120
+MAX_LENGTH = 4096
+BATCH_SIZE = 48
 EARLY_STOP_WARMUP = 12000
 EARLY_STOP_THRESHOLD = 0.001
 EARLY_STOP_PATIENCE = 5
@@ -264,8 +266,8 @@ def train_model(
 
     training_args = transformers.TrainingArguments(
         output_dir=output_dir,
-        per_device_train_batch_size=util.classification.BATCH_SIZE,
-        per_device_eval_batch_size=util.classification.BATCH_SIZE,
+        per_device_train_batch_size=BATCH_SIZE,
+        per_device_eval_batch_size=BATCH_SIZE,
         num_train_epochs=EPOCHS,
         eval_strategy="steps",
         eval_steps=EVAL_STEPS,
@@ -288,7 +290,7 @@ def train_model(
     )
 
     trainer = BucketedTrainer(
-        bucket_batch_size=util.classification.BATCH_SIZE,
+        bucket_batch_size=BATCH_SIZE,
         pos_weight=pos_weight,
         model=model,
         args=training_args,
@@ -364,13 +366,13 @@ def test_model(
     full_ds = make_ds(test_df)
 
     trainer = BucketedTrainer(
-        bucket_batch_size=util.classification.BATCH_SIZE,
+        bucket_batch_size=BATCH_SIZE,
         pos_weight=1.0,  # not used in eval mode
         model=model,
         args=transformers.TrainingArguments(
             output_dir=output_dir / "eval",
             do_train=False,
-            per_device_eval_batch_size=util.classification.BATCH_SIZE,
+            per_device_eval_batch_size=BATCH_SIZE,
             disable_tqdm=True,
         ),
         train_dataset=None,
