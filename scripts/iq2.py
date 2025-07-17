@@ -3,7 +3,7 @@ import json
 
 import pandas as pd
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_PATH = Path("../downloads/iq2/iq2_data_release.json")
@@ -20,33 +20,36 @@ def json_to_df(json_dataset: dict) -> pd.DataFrame:
     return pd.concat(discussion_dfs, ignore_index=True)
 
 
-def assign_reply_to(group):
-    group = group.sort_index()  # Preserve original order within conversation
-    group["reply_to"] = [None] + group["message_id"].iloc[:-1].tolist()
-    return group
-
-
 def main():
     with INPUT_PATH.open("r") as fin:
         contents = json.load(fin)
 
     df = json_to_df(contents)
     df = df.explode("paragraphs")
+    df = df.reset_index()
     df.paragraphs = df.paragraphs.str.replace("uh,", "")
     df.paragraphs = df.paragraphs.str.replace("...", "")
 
     df["is_moderator"] = df.speakertype.apply(lambda x: x in ["mod", "host"])
+    df["moderation_supported"] = True
+
+    df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
     df["message_id"] = df.apply(
-        lambda row: preprocessing_util.hash_to_md5(
-            row.get("paragraphs") + row.get("conv_id")
-        ),
+        lambda row: f"iq2-{row.get('conv_id')}-{row.get('speaker_turn')}",
         axis=1,
     )
     df["dataset"] = "iq2"
     df["notes"] = None
-    df["reply_to"] = None  # Initialize the column
-    # this is deprecated, but idk how to cleanly keep the conv_id column
-    df = df.groupby("conv_id", group_keys=False).apply(assign_reply_to)
+
+    df["escalated"] = False
+    df["escalation_supported"] = False
+    
+    df["reply_to"] = util.preprocessing.assign_reply_to(
+        df,
+        conv_id_col="conv_id",
+        message_id_col="message_id",
+        order_col="speaker_turn",
+    )
 
     df = df.rename(
         columns={
@@ -54,7 +57,7 @@ def main():
             "speaker": "user",
         }
     )
-    df = preprocessing_util.std_format_df(df)
+    df = util.preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

@@ -18,14 +18,14 @@ def filter_discussions_by_comment_count(
 
     Parameters:
     - df (pd.DataFrame): The dataframe containing the discussion data.
-    - min_comments (int): Minimum number of comments required to keep a 
+    - min_comments (int): Minimum number of comments required to keep a
     discussion.
-    - max_comments (int or None): Maximum number of comments allowed to keep a 
+    - max_comments (int or None): Maximum number of comments allowed to keep a
     discussion.
     - discussion_col (str): Name of the column identifying discussions.
 
     Returns:
-    - pd.DataFrame: Filtered dataframe containing only discussions within the 
+    - pd.DataFrame: Filtered dataframe containing only discussions within the
     specified range.
     """
     discussion_counts = df[discussion_col].value_counts()
@@ -67,6 +67,9 @@ def std_format_df(df: pd.DataFrame) -> pd.DataFrame:
             "reply_to",
             "user",
             "is_moderator",
+            "moderation_supported",
+            "escalated",
+            "escalation_supported",
             "text",
             "dataset",
             "notes",
@@ -79,3 +82,28 @@ def get_num_chunks(file_path: Path, chunk_size: int) -> int:
         ["wc", "-l", str(file_path)], capture_output=True, text=True
     )
     return math.ceil(int(result.stdout.strip().split()[0]) / chunk_size)
+
+
+def get_valid_discussion_ids(df, conv_id_col: str, user_col: str):
+    user_counts = df.groupby(conv_id_col)[user_col].nunique()
+    valid_discussions = user_counts[user_counts > 1]
+    return valid_discussions.index.tolist()
+
+
+def assign_reply_to(
+    df: pd.DataFrame, conv_id_col: str, message_id_col: str, order_col: str
+) -> pd.Series:
+    df_sorted = df.sort_values([conv_id_col, order_col])
+    # shift comment id by 1
+    reply_to = df_sorted.groupby(conv_id_col)[message_id_col].shift(1)
+    # The result is aligned with df_sorted, we must reindex to original
+    # df order
+    reply_to = reply_to.reindex(df.index)
+    return reply_to
+
+
+def notes_from_columns(df: pd.DataFrame, cols: list[str]) -> pd.Series:
+    return df.apply(
+        lambda row: {col: row.get(col) for col in cols},
+        axis=1,
+    )

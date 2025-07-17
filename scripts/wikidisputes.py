@@ -4,7 +4,7 @@ import json
 
 import pandas as pd
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_DIR = Path("../downloads/wikidisputes/data")
@@ -35,18 +35,22 @@ def main():
     df = pd.concat([df.reset_index(), conv_df.reset_index()], axis=1)
     df = df.drop(columns=["conversation", "index"])
     df = df[df["conversation.type"] == "original"]
+    df = df[df["conversation.text"].apply(len) > 2]
+
+    # remove duplicate comments
+    df_duplicate = df[df.duplicated('conversation.id', keep=False)]
+    df_dupicate_convs = set(df_duplicate["conversation.id"].unique())
+    df = df[~df["conversation.id"].isin(df_dupicate_convs)]
+    print(f"Removed {len(df_duplicate)} comments with duplicate ids.")
 
     df["is_moderator"] = df["conversation.user"] == df["dispute.mediator"]
+    df["moderation_supported"] = False
+    
     df["dataset"] = "wikidisputes"
-    df["notes"] = df.apply(
-        lambda row: {
-            "escalated": row["escalated"],
-            "toxicity": row["conversation.toxicity"],
-            "severe_toxicity": row["conversation.severe_toxicity"],
-        },
-        axis=1,
-    )
 
+    df["conversation.id"] = "wikidisputes-" + df["conversation.id"]
+    df["conversation.reply_to"] = "wikidisputes-" + df["conversation.reply_to"]
+    # duplicate values in message_id
     df = df.rename(
         columns={
             "conversation.conv_id": "conv_id",
@@ -56,7 +60,13 @@ def main():
             "conversation.id": "message_id",
         }
     )
-    df = preprocessing_util.std_format_df(df)
+    df["notes"] = util.preprocessing.notes_from_columns(
+        df,
+        ["toxicity", "severe_toxicity"],
+    )
+    # df.escalated already in dataframe
+    df["escalation_supported"] = True
+    df = util.preprocessing.std_format_df(df)
 
     df.to_csv(OUTPUT_PATH, index=False)
 

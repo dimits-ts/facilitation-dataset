@@ -16,9 +16,11 @@ The dataset is released under a CC-BY-SA License, and the code producing it uses
 - [WikiConv](https://aclanthology.org/D18-1305/)  
 - [Conversations Gone Awry / CMV II](https://arxiv.org/abs/1909.01362)
 - [CeRI data](https://dl.acm.org/doi/10.1145/2307729.2307757)
-- [UMOD](https://aclanthology.org/2024.eacl-long.60/)
-- [VMD](https://arxiv.org/abs/2503.16505)
-- [Intelligence Squared 2](https://aclanthology.org/N16-1017/)
+- [User Moderation (UMOD)](https://aclanthology.org/2024.eacl-long.60/)
+- [Virtual Moderation Dataset (VMD)](https://arxiv.org/abs/2503.16505)
+- [Intelligence Squared 2 (IQ2)](https://aclanthology.org/N16-1017/)
+- [Why How Who (WHoW)](https://aclanthology.org/2025.naacl-long.105/)
+- [Fora](https://aclanthology.org/2024.acl-long.754/)
 
 A list of references for each of the papers presenting the datasets can be found in the [refs.bib](refs.bib) file.
 
@@ -41,10 +43,16 @@ bash create_dataset.sh
 You may select a subset of the above datasets to be aggregated by deleting any of the following entries in the `create_dataset.sh` script:
 
 ```bash
-bash master.sh ceri cmv_awry2 umod vmd wikiconv wikitactics iq2 | ts %Y-%m-%d_%H-%M-%S | tee "../$LOG_FILE"
+bash master.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 fora | ts %Y-%m-%d_%H-%M-%S | tee "../$LOG_FILE"
 ``` 
 
-**Warning:** The WikiConv dataset is **extremely** large and may take multiple hours to download and process, depending on your hardware.
+## Important Notes
+
+- The *Fora* dataset is NOT publicly available. Under an agreement with the MIT CCC we do not include this dataset by default in this repository, although the code to process it is present. 
+    - If you have access to *Fora*, place the provided `.zip` file in the `project_root/downloads_external` directory.
+    - You may request access to Fora following the researchers' [provided instructions](https://github.com/schropes/fora-corpus/blob/main/README.md)
+
+- The WikiConv dataset is **extremely** large and may take multiple hours to download and process, depending on your hardware.
 
 
 ## Dataset Description
@@ -55,32 +63,20 @@ bash master.sh ceri cmv_awry2 umod vmd wikiconv wikitactics iq2 | ts %Y-%m-%d_%H
 | message_id  | string | The message's (comment's) unique ID.|
 | reply_to    | string | The ID of the comment which the current comment responds to. nan if the comment does not respond to another comment (e.g., it's the Original Post (OP)). |
 | user        | string | Username or hash of the user that posted the comment |
-| is_moderator| bool   | Whether the user is a moderator/facilitator. In some datasets (e.g., UMOD), normal users are considered facilitators if their comments are facilitative in nature. See Section `Preprocessing` for more details |
+| is_moderator| bool   | Whether the user is a moderator/facilitator. In some datasets (e.g., UMOD, Wikitactics), normal users are considered facilitators if their *comments* are facilitative in nature. See Section `Preprocessing` for more details |
+| moderation_supported | bool | True if the moderation labels are directly computed from the original dataset |
+| escalated | bool | True if the comment caused a discussion to get derailed |
+| escalation_supported | bool | True if the escalation labels are directly computed from the original dataset |
 | text      | string | The contents of the comment  |
 | dataset   | string | The dataset from which this comments originated from |
 | notes     | JSON  | A dictionary holding notable dataset-specific information |  
 
 
-## Preprocessing 
+## Preprocessing
+See [preprocessing.md](preprocessing.md).
 
-- We exclude comments with no text
-- The Wikiconv corpus does not contain information about which user is a moderator/facilitator. Therefore, all comments relating to Wikiconv are tagged as non-moderators
-    - Additionally, we follow the [instructions of the original researchers](https://github.com/conversationai/wikidetox/blob/main/wikiconv/README.md), and select only discussions which have at least two comments by different users
-        - Wikipedia (rightfully) does not track users who log in with only an IP address; their user_id is always set to 0 and their username is of the form 211.111.111.xxx. We consider each username following the format above as a separate user.
-        - Due to the size of the dataset, we have to partially load it during preprocessing. Thus, there is a small chance every 100,000 records that a discussion is marked as a false negative and a part of it gets discarded.
-    - We only include English comments in the final dataset. We use a small, efficient library (`py3langid`) for language recongition, due to the large size of Wikiconv. We include every comment that is English with a confidence score of more than 75%. This can be trivially tuned in the `scripts/wikiconv.py` file. Non-english comments are discarded *before* selecting valid discussions (see point above).
-- In WikiDisputes, we infer facilitative actions by whether the comment belongs in any of the following categories:
-    - Asking questions
-    - Coordinating edits
-    - Providing clarification
-    - Suggesting a compromise
-    - Contextualisation
-    - DH6: Refutation of opponent's argument (with evidence or reasoning)
-    - DH5: Counterargument with new evidence / reasoning
-    - DH7: Refuting the central point
-- In UMOD, facilitative actions are marked as a gradient from 0 (no facilitation) to 1 (full facilitation). We adopt a threshold of 0.75 to consider an action as facilitative, with more than 50% annotator agreement (measured as entropy in the original dataset).
-- In IQ2, we remove verbal linguistic markers ("...", "uh,").
-
+## Facilitative detection
+See [inference.md](inference.md).
 
 ## Acknowledgements
 

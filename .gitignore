@@ -1,7 +1,10 @@
 datasets/
 downloads/
+downloads_external/
+logs*/
+checkpoints/
 *.csv
-*.log
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

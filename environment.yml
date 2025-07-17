@@ -3,12 +3,20 @@ channels:
   - defaults
   - conda-forge
 dependencies:
-  - python
+  - python>=3.13
   - pandas
   - numpy
   - tqdm
   - openpyxl
   - moreutils
+  - datasets
+  - scikit-learn
+  - notebook 
+  - ipywidgets
   - pip
   - pip:
       - py3langid
+      - accelerate>=0.26.0
+      - torch
+      - transformers
+      - tensorboard

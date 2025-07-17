@@ -1,8 +1,9 @@
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_PATH = Path("../downloads/umod/umod.csv")
@@ -53,44 +54,6 @@ def aggregate_notes(df, exclude_cols):
     return df
 
 
-def compute_reply_to(
-    df, conv_id_col="id", source_col="source", id_col="message_id"
-):
-    """
-    Given a stacked DataFrame of conversation turns with source labels and
-    unique IDs, returns a pd.Series `reply_to` where:
-        - preceding_comment rows get NaN
-        - reply rows get the message_id of their corresponding
-        preceding_comment (same conv_id)
-
-    Args:
-        df (pd.DataFrame): The stacked DataFrame.
-        conv_id_col (str): Column name identifying the conversation.
-        source_col (str): Column indicating if a row is a 'preceding_comment'
-        or 'reply'.
-        id_col (str): Unique identifier for each row (message_id).
-
-    Returns:
-        pd.Series: Series of same length as df with reply_to information.
-    """
-    # Create a mapping from conv_id to message_id for preceding comments
-    preceding_map = df.loc[
-        df[source_col] == "preceding_comment", [conv_id_col, id_col]
-    ]
-    conv_to_msgid = dict(
-        zip(preceding_map[conv_id_col], preceding_map[id_col])
-    )
-
-    # Initialize reply_to as NaNs
-    reply_to = pd.Series(index=df.index, dtype=object)
-
-    # Fill in reply rows with the matching preceding_comment message_id
-    is_reply = df[source_col] == "reply"
-    reply_to[is_reply] = df.loc[is_reply, conv_id_col].map(conv_to_msgid)
-
-    return reply_to
-
-
 def main():
     df = pd.read_csv(INPUT_PATH, sep="\t")
     df = combine_comments(df)
@@ -104,8 +67,11 @@ def main():
             "softlabel_raw",
         ],
     )
-
-    df["message_id"] = df.text.apply(preprocessing_util.hash_to_md5)
+    df["speaker_turn"] = np.where(df.source == "reply", 1, 0)
+    df["message_id"] = df.apply(
+        lambda row: f"umod-{row.get('id')}-{row.get('speaker_turn')}",
+        axis=1,
+    )
     # if comment is reply, is 70% moderation (aggregated via labels) and
     # if annotators are more than 50% confident
     df["is_moderator"] = (
@@ -113,13 +79,23 @@ def main():
         & (df.entropy_moderation <= 0.75)
         & (df.softlabel_raw >= 0.75)
     )
+    df["moderation_supported"] = True
+
     # all users are unique
-    df["user"] = df.message_id
+    df["user"] = "user-" + df.message_id
+    
     df["dataset"] = "umod"
-    df["reply_to"] = compute_reply_to(df)
+    df["reply_to"] = util.preprocessing.assign_reply_to(
+        df,
+        conv_id_col="id",
+        message_id_col="message_id",
+        order_col="speaker_turn",
+    )
+    df["escalated"] = False
+    df["escalation_supported"] = False
 
     df = df.rename(columns={"id": "conv_id"})
-    df = preprocessing_util.std_format_df(df)
+    df = util.preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

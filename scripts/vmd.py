@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_PATH = Path("../downloads/vmd/data/datasets/dataset.csv")
@@ -24,7 +24,7 @@ def get_arg_qual(annotation_str: str) -> float:
 
 
 def assign_reply_to(df):
-    # Sort by conv_id and some timestamp proxy, here assuming row order or 
+    # Sort by conv_id and some timestamp proxy, here assuming row order or
     # message_id order
     df = df.sort_values(by=["conv_id", "message_id"]).reset_index(drop=True)
 
@@ -45,20 +45,26 @@ def main():
     ).agg({"toxicity": "mean", "arg_qual": "mean"})
     df = df.reset_index()
 
-    df = assign_reply_to(df)
-    df["reply_to"] = df.reply_to.astype(str)
+    df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
+    df["reply_to"] = util.preprocessing.assign_reply_to(
+        df,
+        conv_id_col="conv_id",
+        message_id_col="message_id",
+        order_col="speaker_turn",
+    )
 
-    df["notes"] = df.apply(
-        lambda row: {
-            "model": row.get("model"),
-            "toxicity": row.get("toxicity"),
-            "arg_qual": row.get("arg_qual"),
-        },
-        axis=1,
+    df["notes"] = util.preprocessing.notes_from_columns(
+        df, ["model", "toxicity", "arg_qual"]
     )
     df["dataset"] = "vmd"
+
+    df["escalated"] = False
+    df["escalation_supported"] = False
+
+    df["moderation_supported"] = True
+
     df = df.rename(columns={"message": "text"})
-    df = preprocessing_util.std_format_df(df)
+    df = util.preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

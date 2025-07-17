@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_PATH = Path(
@@ -10,14 +10,16 @@ INPUT_PATH = Path(
     "utterances.jsonl"
 )
 OUTPUT_PATH = Path("../datasets/cmv_awry2.csv")
+PERCENTILE_ESCALATION = 60
 
 
 def main():
     df = pd.read_json(INPUT_PATH, lines=True)
-    # df["conversation_id"].value_counts().describe()
 
-    df["dataset"] = "cmv_awry"
-    df["is_moderator"] = False
+    deleted_comments = df.text == "[deleted]"
+    print(f"Removed {len(deleted_comments)} deleted comments")
+    df = df[~deleted_comments]    
+    
     df.meta = df.meta.apply(lambda _dict: f"Derailment={_dict['score']}")
     df = df.rename(
         columns={
@@ -29,7 +31,18 @@ def main():
             "meta": "notes",
         }
     )
-    df = preprocessing_util.std_format_df(df)
+    
+    df["dataset"] = "cmv_awry"
+    df["escalated"] = df.notes.apply(lambda x: int(x.split("=")[1]))
+    threshold = df["escalated"].quantile(PERCENTILE_ESCALATION / 100)
+    df["escalated"] = df["escalated"] > threshold
+    df["escalation_supported"] = True
+
+    df["is_moderator"] = False
+    df["moderation_supported"] = False
+
+    df = util.preprocessing.std_format_df(df)
+
     df.to_csv(OUTPUT_PATH, index=False)
 
 

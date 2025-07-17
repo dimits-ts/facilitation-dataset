@@ -5,7 +5,7 @@ import pandas as pd
 import py3langid as langid
 from tqdm.auto import tqdm
 
-from tasks import preprocessing_util
+import util.preprocessing
 
 
 INPUT_DIR = Path("../downloads/wikiconv")
@@ -19,7 +19,7 @@ def main():
     for file_path in tqdm(jsonl_files, desc="Yearly datasets"):
         for chunk in tqdm(
             pd.read_json(file_path, lines=True, chunksize=CHUNK_SIZE),
-            total=preprocessing_util.get_num_chunks(file_path, CHUNK_SIZE),
+            total=util.preprocessing.get_num_chunks(file_path, CHUNK_SIZE),
             leave=False,
             desc="Dataset chunks",
         ):
@@ -33,8 +33,10 @@ def main():
             first_chunk = False
 
 
-def process_dataset(df):
-    df = df.dropna(subset=["text"])
+def process_dataset(full_df):
+    df = full_df.loc[
+        full_df.text.apply(lambda x: x.strip()).apply(len) > 0
+    ].copy()
     # masked IP addresses are tracked to the same user_id
     # (found in wikiconv-20**/speakers.json). Thus, to be safe, we consider
     # them as separate, unique users
@@ -48,7 +50,9 @@ def process_dataset(df):
     df = df[df.text.astype(str).progress_apply(is_english)]
 
     # Filter out conversations with only one user commenting
-    valid_discussion_ids = get_valid_discussion_ids(df)
+    valid_discussion_ids = util.preprocessing.get_valid_discussion_ids(
+        df, conv_id_col="conversation_id", user_col="speaker"
+    )
     df = df[df.conversation_id.isin(valid_discussion_ids)]
 
     df = add_notes(df)
@@ -67,18 +71,20 @@ def add_notes(df):
         axis=1,
     )
     df = df.drop(columns=["meta"])
-    df["notes"] = df.apply(
-        lambda row: {
-            "toxicity": row.get("meta.toxicity"),
-            "severe_toxicity": row.get("meta.sever_toxicity"),
-        },
-        axis=1,
+    df["notes"] = util.preprocessing.notes_from_columns(
+        df, ["meta.toxicity", "meta.sever_toxicity"]
     )
     return df
 
 
 def add_meta_cols(df):
     df["is_moderator"] = False
+    df["moderation_supported"] = False
+    # TODO: Maybe infer esclation from toxicity using statistical relationships
+    # between toxicity and escalation from wikitactics
+    df["escalated"] = False
+    df["escalation_supported"] = False
+
     df["dataset"] = "wikiconv"
     return df
 
@@ -89,18 +95,15 @@ def conform_to_pefk(df):
             "conversation_id": "conv_id",
             "reply-to": "reply_to",
             "id": "message_id",
+            "text": "text",
             "speaker": "user",
+            "meta.toxicity": "toxicity",
+            "meta.sever_toxicity": "sever_toxicity",
         }
     )
 
-    df = preprocessing_util.std_format_df(df)
+    df = util.preprocessing.std_format_df(df)
     return df
-
-
-def get_valid_discussion_ids(df):
-    user_counts = df.groupby("conversation_id")["speaker"].nunique()
-    valid_discussions = user_counts[user_counts > 1]
-    return valid_discussions.index.tolist()
 
 
 def is_english(text: str) -> bool:
@@ -112,7 +115,7 @@ def is_english(text: str) -> bool:
     """
     try:
         lang, prob = langid.classify(text)
-        return lang == "en" and prob >= 0.7
+        return lang == "en"
     except Exception:
         return False
 
