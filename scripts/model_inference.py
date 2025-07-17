@@ -128,6 +128,7 @@ def infer_and_append(
     model,
     tokenizer,
     destination_dataset_path: Path,
+    output_column_name: str
 ) -> None:
     if destination_dataset_path.exists():
         print(f"{destination_dataset_path} already exists. Exiting ...")
@@ -150,7 +151,7 @@ def infer_and_append(
         for batch in tqdm(dataloader, desc="Running inference", leave=False):
             probs = _infer(model, device, batch)
             df_batch = annotated_df.iloc[offset:offset + len(probs)].copy()
-            df_batch["moderator_prob"] = probs
+            df_batch[output_column_name] = probs
 
             write_queue.put(df_batch)
             offset += len(probs)
@@ -168,6 +169,7 @@ def main(args: argparse.Namespace) -> None:
     src_path = Path(args.source_dataset_path)
     dst_path = Path(args.destination_dataset_path)
     dst_path.parent.mkdir(parents=True, exist_ok=True)
+    output_column_name = args.output_column_name
 
     # model ────────────────────────────────────────────────────────────────
     model, tokenizer = load_trained_model_tokenizer(model_dir)
@@ -187,6 +189,7 @@ def main(args: argparse.Namespace) -> None:
         model=model,
         tokenizer=tokenizer,
         destination_dataset_path=dst_path,
+        output_column_name=output_column_name
     )
 
     print("Dataset written to", dst_path)
@@ -215,6 +218,13 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Path for the continuously growing output dataset (CSV).",
+    )
+    parser.add_argument(
+        "--output_column_name",
+        type=str,
+        required=True,
+        choices=["mod_probabilities", "escalation_probabilities"],
+        help="How to name the new inferred column",
     )
 
     main(parser.parse_args())
