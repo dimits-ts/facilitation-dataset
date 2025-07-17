@@ -11,11 +11,10 @@ After each mini-batch the script
 This preserves crash-resumability with minimal RAM use (no long lists of logits
 kept in memory) while letting downstream processes stream-read the growing CSV.
 """
-from __future__ import annotations
-
 from pathlib import Path
 import argparse
-from typing import List
+import threading
+import queue
 
 import pandas as pd
 import torch
@@ -23,6 +22,9 @@ import transformers
 from tqdm.auto import tqdm
 
 import util.classification
+
+BATCH_SIZE = 24
+MAX_LENGTH = 512
 
 
 # ───────────────────────────────────── Dataset & DataLoader ──────────────────
@@ -57,21 +59,21 @@ def _build_dataloader(
 
     dataset = _DiscussionDataset(df)
 
-    def collate_fn(batch_texts: List[str]):
+    def collate_fn(batch_texts: list[str]):
         return tokenizer(
             batch_texts,
             padding="longest",
             truncation=True,
-            max_length=util.classification.MAX_LENGTH,
+            max_length=MAX_LENGTH,
             return_tensors="pt",
         )
 
     return torch.utils.data.DataLoader(
         dataset,
-        batch_size=util.classification.BATCH_SIZE - 2,  # a little headroom
+        batch_size=BATCH_SIZE,  # a little headroom
         shuffle=False,  # preserve order
         collate_fn=collate_fn,
-        num_workers=6,
+        num_workers=1,
         pin_memory=torch.cuda.is_available(),
     )
 
@@ -81,7 +83,7 @@ def _build_dataloader(
 
 def load_trained_model_tokenizer(model_dir: Path):
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
-        model_dir, reference_compile=False,attn_implementation="eager"
+        model_dir, reference_compile=False, attn_implementation="eager"
     )
     tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
     return model, tokenizer
@@ -99,6 +101,18 @@ def _append_batch_to_csv(
     df_batch.to_csv(out_path, mode=mode, header=first_batch, index=False)
 
 
+def writer_thread_func(write_queue: queue.Queue, out_path: Path):
+    """Continuously writes batches to disk from the queue."""
+    first_batch = True
+    while True:
+        df_batch = write_queue.get()
+        if df_batch is None:  # Sentinel to shut down
+            break
+        _append_batch_to_csv(df_batch, out_path, first_batch=first_batch)
+        first_batch = False
+        write_queue.task_done()
+
+
 # ───────────────────────────────────── Inference loop ────────────────────────
 
 
@@ -108,18 +122,13 @@ def _infer(model, device: str, batch):
     return probs
 
 
+# offload IO writing to async thread
 def infer_and_append(
     annotated_df: pd.DataFrame,
     model,
     tokenizer,
     destination_dataset_path: Path,
 ) -> None:
-    """Streams **full dataframe batches** (incl. ``moderator_prob``) to a CSV.
-
-    The function exits early if ``destination_dataset_path`` already exists, so
-    you can safely resume a crashed run by deleting the partially written file
-    before re-launching.
-    """
     if destination_dataset_path.exists():
         print(f"{destination_dataset_path} already exists. Exiting ...")
         return
@@ -128,25 +137,26 @@ def infer_and_append(
     model.to(device).eval()
     dataloader = _build_dataloader(annotated_df, tokenizer)
 
+    write_queue = queue.Queue(maxsize=8)
+    writer_thread = threading.Thread(
+        target=writer_thread_func,
+        args=(write_queue, destination_dataset_path),
+        daemon=True,
+    )
+    writer_thread.start()
+
     with torch.inference_mode():
         offset = 0
-        for batch_idx, batch in enumerate(
-            tqdm(dataloader, desc="Running inference", leave=False)
-        ):
-            # model forward ────────────────────────────────────────────────
+        for batch in tqdm(dataloader, desc="Running inference", leave=False):
             probs = _infer(model, device, batch)
-            # dataframe slice for this mini-batch ─────────────────────────
             df_batch = annotated_df.iloc[offset:offset + len(probs)].copy()
             df_batch["moderator_prob"] = probs
 
-            # persist to disk ─────────────────────────────────────────────
-            _append_batch_to_csv(
-                df_batch,
-                destination_dataset_path,
-                first_batch=(batch_idx == 0),
-            )
-
+            write_queue.put(df_batch)
             offset += len(probs)
+
+    write_queue.put(None)  # Sentinel to signal writer to finish
+    writer_thread.join()
 
 
 # ────────────────────────────────────────── Main ─────────────────────────────
