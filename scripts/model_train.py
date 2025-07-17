@@ -1,7 +1,6 @@
 from pathlib import Path
 import argparse
 import random
-import re
 
 import pandas as pd
 import torch
@@ -120,7 +119,7 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
     def __iter__(self):
         # -- bucketed indices, then shuffle buckets --
         batches = [
-            self.sorted_indices[i : i + self.batch_size]
+            self.sorted_indices[i:i + self.batch_size]
             for i in range(0, len(self.sorted_indices), self.batch_size)
         ]
         if self.drop_last and len(batches[-1]) < self.batch_size:
@@ -138,7 +137,8 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
 class BucketedTrainer(WeightedLossTrainer):
     """
     Overrides get_train_dataloader() and get_eval_dataloader()
-    so Trainer uses our bucketed sampler for train and default sampler + collate_fn for eval.
+    so Trainer uses our bucketed sampler for train and default sampler 
+    + collate_fn for eval.
     """
 
     def __init__(self, bucket_batch_size, *args, **kwargs):
@@ -246,6 +246,9 @@ def train_model(
     logs_dir: Path,
     tokenizer,
 ):
+    def collate(batch):
+        return collate_fn(tokenizer, batch)
+
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
         MODEL,
         reference_compile=False,
@@ -284,8 +287,6 @@ def train_model(
         greater_is_better=False,
     )
 
-    data_collator = lambda batch: collate_fn(tokenizer, batch)
-
     trainer = BucketedTrainer(
         bucket_batch_size=util.classification.BATCH_SIZE,
         pos_weight=pos_weight,
@@ -295,7 +296,7 @@ def train_model(
         eval_dataset=val_dat,
         compute_metrics=util.classification.compute_metrics,
         callbacks=[early_stopping],
-        data_collator=data_collator,
+        data_collator=collate,
     )
 
     checkpoint = finetuned_model_dir if finetuned_model_dir.is_dir() else None
@@ -337,10 +338,11 @@ def test_model(
 ) -> pd.DataFrame:
     """
     Evaluate best checkpoint on each dataset and on the full test split.
-    Returns a DataFrame indexed by dataset name with columns: loss, accuracy, f1
+    Returns a DataFrame indexed by dataset name with columns:
+    loss, accuracy, f1
     """
 
-    # ── load checkpoint ───────────────────────────────────────────────────────
+    # ── load checkpoint ────────────────────────────────────────────────────
     best_model_dir = output_dir / "best_model"
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
         best_model_dir,
@@ -379,7 +381,7 @@ def test_model(
 
     individual_raw = trainer.evaluate(eval_dataset=eval_dict)
     all_raw = trainer.evaluate(eval_dataset=full_ds)
-    res_df = results_to_df(individual_raw=individual_raw,all_raw=all_raw)
+    res_df = results_to_df(individual_raw=individual_raw, all_raw=all_raw)
     return res_df
 
 
@@ -426,9 +428,6 @@ def main(args) -> None:
     )
     val_dataset = DiscussionModerationDataset(
         val_df, tokenizer, util.classification.MAX_LENGTH
-    )
-    test_dataset = DiscussionModerationDataset(
-        test_df, tokenizer, util.classification.MAX_LENGTH
     )
 
     if not only_test:
