@@ -22,6 +22,7 @@ import transformers
 from tqdm.auto import tqdm
 
 import util.classification
+import util.io
 
 BATCH_SIZE = 24
 MAX_LENGTH = 512
@@ -89,30 +90,6 @@ def load_trained_model_tokenizer(model_dir: Path):
     return model, tokenizer
 
 
-def _append_batch_to_csv(
-    df_batch: pd.DataFrame, out_path: Path, *, first_batch: bool
-) -> None:
-    """Append a dataframe slice to ``out_path``.
-
-    Header is written only on the first batch so that the final file is a valid
-    CSV concatenation of all batches.
-    """
-    mode = "w" if first_batch else "a"
-    df_batch.to_csv(out_path, mode=mode, header=first_batch, index=False)
-
-
-def writer_thread_func(write_queue: queue.Queue, out_path: Path):
-    """Continuously writes batches to disk from the queue."""
-    first_batch = True
-    while True:
-        df_batch = write_queue.get()
-        if df_batch is None:  # Sentinel to shut down
-            break
-        _append_batch_to_csv(df_batch, out_path, first_batch=first_batch)
-        first_batch = False
-        write_queue.task_done()
-
-
 # ───────────────────────────────────── Inference loop ────────────────────────
 
 
@@ -140,7 +117,7 @@ def infer_and_append(
 
     write_queue = queue.Queue(maxsize=8)
     writer_thread = threading.Thread(
-        target=writer_thread_func,
+        target=util.io.writer_thread_func,
         args=(write_queue, destination_dataset_path),
         daemon=True,
     )
