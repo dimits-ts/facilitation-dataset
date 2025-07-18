@@ -4,7 +4,6 @@ import queue
 import threading
 import time
 from pathlib import Path
-from typing import Iterable
 
 import pandas as pd
 import requests
@@ -12,12 +11,17 @@ from tqdm.auto import tqdm
 
 import util.io
 
+
 DELAY_SECS = 1.1
 BATCH_SIZE = 100
 
 
+def get_response(raw_res: dict, attribute: str):
+    return raw_res["attributeScores"][attribute]["summaryScore"]["value"]
+
+
 def get_perspective_scores(
-    texts: Iterable[str], api_key: str, out_path: Path
+    df: pd.DataFrame, api_key: str, out_path: Path
 ) -> None:
     url = (
         "https://commentanalyzer.googleapis.com/v1alpha1/"
@@ -33,9 +37,12 @@ def get_perspective_scores(
 
     batch = []
 
-    for idx, text in tqdm(
-        enumerate(texts), total=len(texts), desc="Scoring comments"
+    for idx, row in tqdm(
+        df.iterrows(), total=len(df), desc="Scoring comments"
     ):
+        text = row["text"]
+        msg_id = row["message_id"]
+
         data = {
             "comment": {"text": text},
             "languages": ["en"],
@@ -50,29 +57,25 @@ def get_perspective_scores(
             response.raise_for_status()
             result = response.json()
 
-            toxicity = result["attributeScores"]["TOXICITY"]["summaryScore"][
-                "value"
-            ]
-            severe_toxicity = result["attributeScores"]["SEVERE_TOXICITY"][
-                "summaryScore"
-            ]["value"]
+            toxicity = get_response(result, "TOXICITY")
+            severe_toxicity = get_response(result, "SEVERE_TOXICITY")
 
-            row = {
-                "text": text,
+            result_row = {
+                "message_id": msg_id,
                 "toxicity": toxicity,
                 "severe_toxicity": severe_toxicity,
                 "error": None,
             }
 
         except requests.exceptions.RequestException as e:
-            row = {
-                "text": text,
+            result_row = {
+                "message_id": msg_id,
                 "toxicity": None,
                 "severe_toxicity": None,
                 "error": str(e),
             }
 
-        batch.append(row)
+        batch.append(result_row)
 
         if len(batch) >= BATCH_SIZE:
             write_q.put(pd.DataFrame(batch))
@@ -97,12 +100,13 @@ def main(args):
 
     print("Loading dataset...")
     df = pd.read_csv(args.input_csv)
-    df = df[df.dataset.isin(["wikitactics", "wikidisputes"])]
+    df = df.loc[
+        df.dataset.isin(["wikitactics", "wikidisputes"]),
+        ["message_id", "text"],
+    ]
 
     print("Beggining scoring of comments...")
-    get_perspective_scores(
-        df.text.tolist(), api_key=api_key, out_path=Path(args.output_csv)
-    )
+    get_perspective_scores(df, api_key=api_key, out_path=Path(args.output_csv))
 
 
 if __name__ == "__main__":
