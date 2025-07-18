@@ -20,4 +20,3 @@ def writer_thread_func(write_queue: queue.Queue, out_path: Path):
         _append_batch_to_csv(df_batch, out_path, first_batch=first_batch)
         first_batch = False
         write_queue.task_done()
-

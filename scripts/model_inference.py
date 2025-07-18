@@ -4,7 +4,7 @@ Infer moderator probabilities and append **full dataframe batches** to disk.
 
 After each mini-batch the script
     1. computes fresh probabilities,
-    2. inserts them into the corresponding slice of the in-memory DataFrame, 
+    2. inserts them into the corresponding slice of the in-memory DataFrame,
     3. appends **that entire slice** (all original columns + the new
        ``moderator_prob`` column) to ``--destination_dataset_path``.
 
@@ -105,7 +105,7 @@ def infer_and_append(
     model,
     tokenizer,
     destination_dataset_path: Path,
-    output_column_name: str
+    output_column_name: str,
 ) -> None:
     if destination_dataset_path.exists():
         print(f"{destination_dataset_path} already exists. Exiting ...")
@@ -166,7 +166,7 @@ def main(args: argparse.Namespace) -> None:
         model=model,
         tokenizer=tokenizer,
         destination_dataset_path=dst_path,
-        output_column_name=output_column_name
+        output_column_name=output_column_name,
     )
 
     print("Dataset written to", dst_path)

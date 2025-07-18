@@ -1,29 +1,38 @@
-import requests
-import json
-import time
 import argparse
-from typing import Iterable, List, Dict
+import json
+import queue
+import threading
+import time
+from pathlib import Path
+from typing import Iterable
 
 import pandas as pd
+import requests
 from tqdm.auto import tqdm
 
+import util.io
+
 DELAY_SECS = 1.1
+BATCH_SIZE = 100
 
 
-def save_perspective_results(results: List[Dict], filename: str) -> None:
-    with open(filename, "w", encoding="utf-8") as f:
-        for result in results:
-            f.write(json.dumps(result, ensure_ascii=False) + "\n")
-
-
-def get_perspective_scores(texts: Iterable[str], api_key: str) -> List[Dict]:
+def get_perspective_scores(
+    texts: Iterable[str], api_key: str, out_path: Path
+) -> None:
     url = (
         "https://commentanalyzer.googleapis.com/v1alpha1/"
         f"comments:analyze?key={api_key}"
     )
     headers = {"Content-Type": "application/json"}
 
-    results = []
+    write_q = queue.Queue()
+    writer_thread = threading.Thread(
+        target=util.io.writer_thread_func, args=(write_q, out_path)
+    )
+    writer_thread.start()
+
+    batch = []
+
     for idx, text in tqdm(
         enumerate(texts), total=len(texts), desc="Scoring comments"
     ):
@@ -48,32 +57,37 @@ def get_perspective_scores(texts: Iterable[str], api_key: str) -> List[Dict]:
                 "summaryScore"
             ]["value"]
 
-            results.append(
-                {
-                    "text": text,
-                    "toxicity": toxicity,
-                    "severe_toxicity": severe_toxicity,
-                }
-            )
+            row = {
+                "text": text,
+                "toxicity": toxicity,
+                "severe_toxicity": severe_toxicity,
+                "error": None,
+            }
 
         except requests.exceptions.RequestException as e:
-            print(f"Error at index {idx}: {e}")
-            results.append(
-                {
-                    "text": text,
-                    "toxicity": None,
-                    "severe_toxicity": None,
-                    "error": str(e),
-                }
-            )
+            row = {
+                "text": text,
+                "toxicity": None,
+                "severe_toxicity": None,
+                "error": str(e),
+            }
+
+        batch.append(row)
+
+        if len(batch) >= BATCH_SIZE:
+            write_q.put(pd.DataFrame(batch))
+            batch = []
 
         time.sleep(DELAY_SECS)
 
-    return results
+    if batch:
+        write_q.put(pd.DataFrame(batch))
+
+    write_q.put(None)
+    writer_thread.join()
 
 
 def main(args):
-    # Read API key from file
     try:
         with open(args.api_key_file, "r") as f:
             api_key = f.read().strip()
@@ -81,18 +95,19 @@ def main(args):
         print(f"Perspective API key file not found: {args.api_key_file}")
         return
 
-    # Load data
+    print("Loading dataset...")
     df = pd.read_csv(args.input_csv)
-    df = df[df.dataset.isin(["wikitactics", "wikidisputes"])]  # fix: use list
+    df = df[df.dataset.isin(["wikitactics", "wikidisputes"])]
 
-    # Run scoring
-    results = get_perspective_scores(df.text, api_key=api_key)
-    save_perspective_results(results, args.output_file)
+    print("Beggining scoring of comments...")
+    get_perspective_scores(
+        df.text.tolist(), api_key=api_key, out_path=Path(args.output_csv)
+    )
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Run Perspective API scoring on a CSV of texts."
+        description="Run Perspective API scoring and save results to CSV."
     )
     parser.add_argument(
         "--api_key_file",
@@ -107,10 +122,10 @@ if __name__ == "__main__":
         help="Path to input CSV file",
     )
     parser.add_argument(
-        "--output_file",
+        "--output_csv",
         type=str,
-        default="perspective_results.jsonl",
-        help="Output file for results",
+        default="perspective_results.csv",
+        help="Output path for CSV file",
     )
 
     args = parser.parse_args()
