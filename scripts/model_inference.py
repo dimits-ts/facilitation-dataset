@@ -24,8 +24,8 @@ from tqdm.auto import tqdm
 import util.classification
 import util.io
 
-BATCH_SIZE = 24
-MAX_LENGTH = 512
+BATCH_SIZE = 8
+MAX_LENGTH = 4096
 
 
 # ───────────────────────────────────── Dataset & DataLoader ──────────────────
