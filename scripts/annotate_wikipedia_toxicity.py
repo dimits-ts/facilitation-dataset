@@ -99,13 +99,14 @@ def main(args):
         return
 
     print("Loading dataset...")
-    df = pd.read_csv(args.input_csv)
+    df = util.io.progress_load_csv(args.input_csv)
     df = df.loc[
-        df.dataset.isin(["wikitactics", "wikidisputes"]),
-        ["message_id", "text"],
+        # exclude datasets that were already annotated with the perspective API
+        ~df.dataset.isin(["wikidisputes", "wikiconv"])
+        ["message_id", "text", "escalated"],
     ]
 
-    print("Beggining scoring of comments...")
+    print("Beginning scoring of comments...")
     get_perspective_scores(df, api_key=api_key, out_path=Path(args.output_csv))
 
 
