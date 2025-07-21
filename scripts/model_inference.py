@@ -156,6 +156,7 @@ def main(args: argparse.Namespace) -> None:
     df = util.io.progress_load_csv(src_path)
     df = df.sort_values(by="text", key=lambda c: c.str.len(), ascending=False)
     annotated_df = util.classification.preprocess_dataset(df)
+    annotated_df = annotated_df.loc[:, ["message_id", "text"]]
     if annotated_df.empty:
         print("No rows match filters - nothing to do.")
         return
