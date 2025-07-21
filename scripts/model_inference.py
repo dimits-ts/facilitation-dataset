@@ -153,7 +153,7 @@ def main(args: argparse.Namespace) -> None:
 
     # load & clean ─────────────────────────────────────────────────────────
     print("Loading data...")
-    df = pd.read_csv(src_path)
+    df = util.io.progress_load_csv(src_path)
     df = df.sort_values(by="text", key=lambda c: c.str.len(), ascending=False)
     annotated_df = util.classification.preprocess_dataset(df)
     if annotated_df.empty:

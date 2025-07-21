@@ -7,6 +7,7 @@ import torch
 import transformers
 
 import util.classification
+import util.io
 
 
 EVAL_STEPS = 4000
@@ -418,7 +419,7 @@ def main(args) -> None:
     util.classification.set_seed(util.classification.SEED)
 
     print("Loading data...")
-    df = pd.read_csv(dataset_path)
+    df = util.io.progress_load_csv(dataset_path)
     df = util.classification.preprocess_dataset(df, dataset_ls)
     pos_weight = (df[target_label] == 0).sum() / (df[target_label] == 1).sum()
 
