@@ -1,6 +1,6 @@
 from pathlib import Path
 
-import pandas as pd
+import util.io
 
 
 INPUT_PATH = Path("../pefk.csv")
@@ -18,7 +18,7 @@ def convert_bytes(num):
 
 def main():
     print("Loading dataset to extract statistics...")
-    df = pd.read_csv(INPUT_PATH)
+    df = util.io.progress_load_csv(INPUT_PATH)
 
     print("*" * 25)
     print("Comments per discussion:")

@@ -4,7 +4,7 @@ Infer moderator probabilities and append **full dataframe batches** to disk.
 
 After each mini-batch the script
     1. computes fresh probabilities,
-    2. inserts them into the corresponding slice of the in-memory DataFrame, 
+    2. inserts them into the corresponding slice of the in-memory DataFrame,
     3. appends **that entire slice** (all original columns + the new
        ``moderator_prob`` column) to ``--destination_dataset_path``.
 
@@ -22,9 +22,10 @@ import transformers
 from tqdm.auto import tqdm
 
 import util.classification
+import util.io
 
-BATCH_SIZE = 24
-MAX_LENGTH = 512
+BATCH_SIZE = 8
+MAX_LENGTH = 4096
 
 
 # ───────────────────────────────────── Dataset & DataLoader ──────────────────
@@ -89,30 +90,6 @@ def load_trained_model_tokenizer(model_dir: Path):
     return model, tokenizer
 
 
-def _append_batch_to_csv(
-    df_batch: pd.DataFrame, out_path: Path, *, first_batch: bool
-) -> None:
-    """Append a dataframe slice to ``out_path``.
-
-    Header is written only on the first batch so that the final file is a valid
-    CSV concatenation of all batches.
-    """
-    mode = "w" if first_batch else "a"
-    df_batch.to_csv(out_path, mode=mode, header=first_batch, index=False)
-
-
-def writer_thread_func(write_queue: queue.Queue, out_path: Path):
-    """Continuously writes batches to disk from the queue."""
-    first_batch = True
-    while True:
-        df_batch = write_queue.get()
-        if df_batch is None:  # Sentinel to shut down
-            break
-        _append_batch_to_csv(df_batch, out_path, first_batch=first_batch)
-        first_batch = False
-        write_queue.task_done()
-
-
 # ───────────────────────────────────── Inference loop ────────────────────────
 
 
@@ -128,6 +105,7 @@ def infer_and_append(
     model,
     tokenizer,
     destination_dataset_path: Path,
+    output_column_name: str,
 ) -> None:
     if destination_dataset_path.exists():
         print(f"{destination_dataset_path} already exists. Exiting ...")
@@ -139,7 +117,7 @@ def infer_and_append(
 
     write_queue = queue.Queue(maxsize=8)
     writer_thread = threading.Thread(
-        target=writer_thread_func,
+        target=util.io.writer_thread_func,
         args=(write_queue, destination_dataset_path),
         daemon=True,
     )
@@ -150,7 +128,7 @@ def infer_and_append(
         for batch in tqdm(dataloader, desc="Running inference", leave=False):
             probs = _infer(model, device, batch)
             df_batch = annotated_df.iloc[offset:offset + len(probs)].copy()
-            df_batch["moderator_prob"] = probs
+            df_batch[output_column_name] = probs
 
             write_queue.put(df_batch)
             offset += len(probs)
@@ -168,15 +146,17 @@ def main(args: argparse.Namespace) -> None:
     src_path = Path(args.source_dataset_path)
     dst_path = Path(args.destination_dataset_path)
     dst_path.parent.mkdir(parents=True, exist_ok=True)
+    output_column_name = args.output_column_name
 
     # model ────────────────────────────────────────────────────────────────
     model, tokenizer = load_trained_model_tokenizer(model_dir)
 
     # load & clean ─────────────────────────────────────────────────────────
     print("Loading data...")
-    df = pd.read_csv(src_path)
+    df = util.io.progress_load_csv(src_path)
     df = df.sort_values(by="text", key=lambda c: c.str.len(), ascending=False)
     annotated_df = util.classification.preprocess_dataset(df)
+    annotated_df = annotated_df.loc[:, ["message_id", "text"]]
     if annotated_df.empty:
         print("No rows match filters - nothing to do.")
         return
@@ -187,6 +167,7 @@ def main(args: argparse.Namespace) -> None:
         model=model,
         tokenizer=tokenizer,
         destination_dataset_path=dst_path,
+        output_column_name=output_column_name,
     )
 
     print("Dataset written to", dst_path)
@@ -215,6 +196,13 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Path for the continuously growing output dataset (CSV).",
+    )
+    parser.add_argument(
+        "--output_column_name",
+        type=str,
+        required=True,
+        choices=["mod_probabilities", "escalation_probabilities"],
+        help="How to name the new inferred column",
     )
 
     main(parser.parse_args())

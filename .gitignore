@@ -4,6 +4,7 @@ downloads_external/
 logs*/
 checkpoints/
 *.csv
+*.key
 
 
 # Byte-compiled / optimized / DLL files

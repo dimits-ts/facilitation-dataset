@@ -6,6 +6,7 @@ import py3langid as langid
 from tqdm.auto import tqdm
 
 import util.preprocessing
+import util.io
 
 
 INPUT_DIR = Path("../downloads/wikiconv")
@@ -19,7 +20,7 @@ def main():
     for file_path in tqdm(jsonl_files, desc="Yearly datasets"):
         for chunk in tqdm(
             pd.read_json(file_path, lines=True, chunksize=CHUNK_SIZE),
-            total=util.preprocessing.get_num_chunks(file_path, CHUNK_SIZE),
+            total=util.io.get_num_chunks(file_path, CHUNK_SIZE),
             leave=False,
             desc="Dataset chunks",
         ):

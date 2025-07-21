@@ -1,7 +1,4 @@
 import hashlib
-import subprocess
-import math
-from pathlib import Path
 
 import pandas as pd
 
@@ -75,13 +72,6 @@ def std_format_df(df: pd.DataFrame) -> pd.DataFrame:
             "notes",
         ],
     ]
-
-
-def get_num_chunks(file_path: Path, chunk_size: int) -> int:
-    result = subprocess.run(
-        ["wc", "-l", str(file_path)], capture_output=True, text=True
-    )
-    return math.ceil(int(result.stdout.strip().split()[0]) / chunk_size)
 
 
 def get_valid_discussion_ids(df, conv_id_col: str, user_col: str):
