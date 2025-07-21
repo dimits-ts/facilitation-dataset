@@ -91,6 +91,14 @@ def discard_long_comments(
     return df
 
 
+def discard_nan_comments(df: pd.DataFrame) -> pd.DataFrame:
+    print("Removing NaN comments...")
+    initial_size = len(df)
+    df = df.dropna(subset=["text", "message_id", "conv_id"])
+    print(f"Removed {initial_size - len(df)} NaN comments.")
+    return df
+
+
 def main():
     tqdm.pandas()
     df = get_unified_dataset(INPUT_DIR)
@@ -118,6 +126,7 @@ def main():
 
     df = discard_long_comments(df, max_length_words=MAX_LENGTH_WORDS)
     df = discard_empty_comments(df)
+    df = discard_nan_comments(df)
     df = discard_one_man_convs(df)
     print(f"Post-processing complete. Exporting dataset to {OUTPUT_PATH}...")
     df.to_csv(OUTPUT_PATH, index=False)
