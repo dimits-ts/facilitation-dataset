@@ -20,11 +20,18 @@ EARLY_STOP_THRESHOLD = 0.001
 EARLY_STOP_PATIENCE = 5
 FINETUNE_ONLY_HEAD = True
 TEST_METRICS = {"loss", "accuracy", "f1"}
-CTX_LENGTH_COMMENTS = 2
+CTX_LENGTH_COMMENTS = 3
 MODEL = "answerdotai/ModernBERT-base"
 
 
 class DiscussionModerationDataset(torch.utils.data.Dataset):
+    """
+    A dataset class that dynamically creates sequences of target comment and N
+    previous comments as context. The resulting strings are in XML format where
+    <CTX> is a context comment, <USR> is the username, and <TGT> is the target
+    comment. Comments are added as context as long as the string would not be 
+    truncated, preventing truncation of tags and target comment.
+    """
     def __init__(
         self,
         df: pd.DataFrame,
@@ -50,30 +57,62 @@ class DiscussionModerationDataset(torch.utils.data.Dataset):
             tokens = self._tokenized_length(idx)
             self._lengths.append(tokens)
 
-    def _build_context(self, idx):
+    def _build_sequence(self, idx: int) -> str:
         """
-        Build N-turn context (with usernames) for a comment at `idx`.
+        Dynamically generates the longest possible sequence of context 
+        comments, up to the specified max_content_turns. 
+        This means the actual target comment is always included, 
+        and we avoid non-closing tags during truncation.
+
+        :param idx: _description_
+        :type idx: int
+        :return: _description_
+        :rtype: str
         """
-        context_turns = []
-        current_id = self.df.at[idx, "reply_to"]
+        target_row = self.df.iloc[idx]
+        target = f"<TGT> <USR>{target_row['user']}</USR> {target_row['text']} </TGT>"
+
+        # Start with just the target and check its length
+        encoded = self.tokenizer.encode(
+            target,
+            add_special_tokens=True,
+            truncation=True,
+            max_length=self.max_length,
+        )
+        remaining_tokens = self.max_length - len(encoded)
+        if remaining_tokens <= 0:
+            return target  # Target alone fills or exceeds the limit
+
+        # Now add context incrementally from most recent to oldest
+        context = []
+        current_id = target_row["reply_to"]
         turns = 0
 
-        while pd.notna(current_id) and turns < self.max_context_turns:
-            prev = self._id2row.get(current_id)
-            if not prev:
+        while (
+            pd.notna(current_id)
+            and turns < self.max_context_turns
+            and remaining_tokens > 0
+        ):
+            row = self._id2row.get(current_id)
+            if not row:
                 break
-            turn = f"<CTX> <USR>{prev['user']}</USR> {prev['text']} </CTX>"
-            context_turns.insert(0, turn)
-            current_id = prev["reply_to"]
+
+            turn = f"<CTX> <USR>{row['user']}</USR> {row['text']} </CTX>"
+            tokenized = self.tokenizer.encode(
+                turn,
+                add_special_tokens=False,
+                truncation=False,
+            )
+
+            if len(tokenized) <= remaining_tokens:
+                context.insert(0, turn)  # prepend newer context
+                remaining_tokens -= len(tokenized)
+            else:
+                break  # adding this turn would exceed the limit
+
+            current_id = row["reply_to"]
             turns += 1
 
-        return context_turns
-
-    def _build_sequence(self, idx):
-        context = self._build_context(idx)
-        target_user = self.df.at[idx, "user"]
-        target_text = self.df.at[idx, "text"]
-        target = f"<TGT> <USR>{target_user}</USR> {target_text} </TGT>"
         return " ".join(context + [target])
 
     def _tokenized_length(self, idx):
@@ -477,7 +516,7 @@ def collate_fn(tokenizer, batch: list[dict[str, str | float]]):
     enc = tokenizer(
         texts,
         padding="longest",
-        truncation=True,
+        truncation=False,
         max_length=MAX_LENGTH,
         return_tensors="pt",
     )
