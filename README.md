@@ -1,6 +1,6 @@
 # The PEFK dataset
 
-Repository housing the "Prosocial and Effective Facilitation in Konversations" (PEFK) dataset. This dataset is an aggregation and standardization of important facilitation datasets presented in Social Science literature. 
+Repository housing the "Prosocial and Effective Facilitation in Konversations" (PEFK) dataset. This dataset is an aggregation and standardization of important facilitation datasets presented in Social Science literature. It also includes numerous metrics and augmented labels from Machine Learning, Deep Learning and LLM classifiers. 
 
 The dataset is provided as a large CSV file. Due to its overall size, it is not available directly on GitHub, but can be constructed by executing a shell script (see `Usage` Section).
 
@@ -40,12 +40,6 @@ conda activate pefk-dataset
 bash create_dataset.sh
 ```
 
-You may select a subset of the above datasets to be aggregated by deleting any of the following entries in the `create_dataset.sh` script:
-
-```bash
-bash master.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 fora | ts %Y-%m-%d_%H-%M-%S | tee "../$LOG_FILE"
-``` 
-
 ## Important Notes
 
 - The *Fora* dataset is NOT publicly available. Under an agreement with the MIT CCC we do not include this dataset by default in this repository, although the code to process it is present. 
@@ -65,18 +59,21 @@ bash master.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 fora | ts %
 | user        | string | Username or hash of the user that posted the comment |
 | is_moderator| bool   | Whether the user is a moderator/facilitator. In some datasets (e.g., UMOD, Wikitactics), normal users are considered facilitators if their *comments* are facilitative in nature. See Section `Preprocessing` for more details |
 | moderation_supported | bool | True if the moderation labels are directly computed from the original dataset |
-| escalated | bool | True if the comment caused a discussion to get derailed |
+| escalated | bool | A discussion-level measure denoting discussions which have been derailed |
 | escalation_supported | bool | True if the escalation labels are directly computed from the original dataset |
 | text      | string | The contents of the comment  |
 | dataset   | string | The dataset from which this comments originated from |
-| notes     | JSON  | A dictionary holding notable dataset-specific information |  
+| notes     | JSON  | A dictionary holding notable dataset-specific information |
+| toxicity | float | The "toxicity" score given to the comment by the Perspective API |
+| severe_toxicity | float | The "severe toxicity" score given to the comment by the Perspective API |
+| mod_probabilities | float | The probability that the comment is facilitative (given by a DL classifier - see Section "Facilitative detection") |
 
 
 ## Preprocessing
 See [preprocessing.md](preprocessing.md).
 
 ## Facilitative detection
-See [inference.md](inference.md).
+See [inference.md](facilitation_detection.md).
 
 ## Acknowledgements
 
