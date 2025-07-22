@@ -38,14 +38,14 @@ def main():
     df = df[df["conversation.text"].apply(len) > 2]
 
     # remove duplicate comments
-    df_duplicate = df[df.duplicated('conversation.id', keep=False)]
-    df_dupicate_convs = set(df_duplicate["conversation.id"].unique())
-    df = df[~df["conversation.id"].isin(df_dupicate_convs)]
+    df_duplicate = df[df.duplicated("conversation.id", keep=False)]
+    df_duplicate_convs = set(df_duplicate["conversation.id"].unique())
+    df = df[~df["conversation.id"].isin(df_duplicate_convs)]
     print(f"Removed {len(df_duplicate)} comments with duplicate ids.")
 
     df["is_moderator"] = df["conversation.user"] == df["dispute.mediator"]
     df["moderation_supported"] = False
-    
+
     df["dataset"] = "wikidisputes"
 
     df["conversation.id"] = "wikidisputes-" + df["conversation.id"]
