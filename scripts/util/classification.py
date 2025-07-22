@@ -17,7 +17,6 @@ def preprocess_dataset(
     df = df.reset_index()
     df.is_moderator = df.is_moderator.astype(float)
     df.text = df.text.astype(str)
-    df = df[df.text.apply(len) > 10]
     return df
 
 

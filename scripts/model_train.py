@@ -14,13 +14,13 @@ import util.io
 EVAL_STEPS = 4000
 EPOCHS = 120
 MAX_LENGTH = 8192
-BATCH_SIZE = 24
+BATCH_SIZE = 32
 EARLY_STOP_WARMUP = 12000
 EARLY_STOP_THRESHOLD = 0.001
 EARLY_STOP_PATIENCE = 5
 FINETUNE_ONLY_HEAD = True
 TEST_METRICS = {"loss", "accuracy", "f1"}
-CTX_LENGTH_COMMENTS = 3
+CTX_LENGTH_COMMENTS = 4
 MODEL = "answerdotai/ModernBERT-base"
 
 
@@ -29,9 +29,10 @@ class DiscussionModerationDataset(torch.utils.data.Dataset):
     A dataset class that dynamically creates sequences of target comment and N
     previous comments as context. The resulting strings are in XML format where
     <CTX> is a context comment, <USR> is the username, and <TGT> is the target
-    comment. Comments are added as context as long as the string would not be 
+    comment. Comments are added as context as long as the string would not be
     truncated, preventing truncation of tags and target comment.
     """
+
     def __init__(
         self,
         df: pd.DataFrame,
@@ -59,9 +60,9 @@ class DiscussionModerationDataset(torch.utils.data.Dataset):
 
     def _build_sequence(self, idx: int) -> str:
         """
-        Dynamically generates the longest possible sequence of context 
-        comments, up to the specified max_content_turns. 
-        This means the actual target comment is always included, 
+        Dynamically generates the longest possible sequence of context
+        comments, up to the specified max_content_turns.
+        This means the actual target comment is always included,
         and we avoid non-closing tags during truncation.
 
         :param idx: _description_
@@ -70,7 +71,10 @@ class DiscussionModerationDataset(torch.utils.data.Dataset):
         :rtype: str
         """
         target_row = self.df.iloc[idx]
-        target = f"<TGT> <USR>{target_row['user']}</USR> {target_row['text']} </TGT>"
+        target = (
+            f"<TGT> <USR>{target_row['user']}</USR>"
+            f"{target_row['text']} </TGT>"
+        )
 
         # Start with just the target and check its length
         encoded = self.tokenizer.encode(
@@ -180,7 +184,7 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
     def __iter__(self):
         # -- bucketed indices, then shuffle buckets --
         batches = [
-            self.sorted_indices[i : i + self.batch_size]
+            self.sorted_indices[i:i + self.batch_size]
             for i in range(0, len(self.sorted_indices), self.batch_size)
         ]
         if self.drop_last and len(batches[-1]) < self.batch_size:
