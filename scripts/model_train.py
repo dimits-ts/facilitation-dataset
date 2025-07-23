@@ -424,6 +424,10 @@ def main(args) -> None:
 
     df = util.io.progress_load_csv(dataset_path)
     df = util.classification.preprocess_dataset(df, dataset_ls)
+    # remove comment if should_intervene is the target
+    # (only case where NaNs should exist)
+    df = df.dropna(subset=target_label)
+
     pos_weight = (df[target_label] == 0).sum() / (df[target_label] == 1).sum()
 
     train_df, val_df, test_df = util.classification._train_validate_test_split(
@@ -527,7 +531,7 @@ if __name__ == "__main__":
         "--target_label",
         type=str,
         default="is_moderator",
-        choices=["is_moderator", "escalated"],
+        choices=["is_moderator", "should_intervene"],
         help="Which column to use as the target label",
     )
     args = parser.parse_args()

@@ -23,7 +23,7 @@ from tqdm.auto import tqdm
 import util.classification
 import util.io
 
-BATCH_SIZE = 4
+BATCH_SIZE = 3
 MAX_LENGTH = 8192
 CTX_LENGTH_COMMENTS = 4
 
@@ -146,7 +146,7 @@ def main(args: argparse.Namespace) -> None:
         max_context_turns=CTX_LENGTH_COMMENTS,
     )
 
-    print("Sorting data by tokenized sequence length...")
+    print("Sorting data by sequence length...")
     dataset = sort_dataset_by_tokenized_sequence_length(dataset)
 
     # Inference
@@ -188,7 +188,7 @@ if __name__ == "__main__":
         "--output_column_name",
         type=str,
         required=True,
-        choices=["mod_probabilities", "escalation_probabilities"],
+        choices=["mod_probabilities", "should_intervene_probabilities"],
         help="How to name the new inferred column",
     )
 
