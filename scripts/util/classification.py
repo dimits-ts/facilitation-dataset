@@ -5,7 +5,7 @@ import torch.nn
 import sklearn.model_selection
 import sklearn.metrics
 import transformers
-
+from tqdm.auto import tqdm
 
 SEED = 42
 
@@ -40,9 +40,35 @@ class DiscussionDataset(torch.utils.data.Dataset):
         self._labels = self.df[self.label_column].astype(float).tolist()
 
         self._lengths = []
-        for idx in range(len(self.df)):
-            tokens = self._tokenized_length(idx)
-            self._lengths.append(tokens)
+        for idx in tqdm(
+            range(len(self.df)), desc="Estimating lengths", total=len(self.df)
+        ):
+            char_len = self._heuristic_char_length(idx)
+            self._lengths.append(char_len)
+
+    def _heuristic_char_length(self, idx: int) -> int:
+        """
+        Returns an estimated character length of the context + target sequence
+        without tokenization. Includes tag and user string overhead.
+        """
+        total_chars = 0
+        turns = 0
+
+        target_row = self.df.iloc[idx]
+        tgt = f"<TGT> <USR>{target_row['user']}</USR>{target_row['text']} </TGT>"
+        total_chars += len(tgt)
+
+        current_id = target_row["reply_to"]
+        while pd.notna(current_id) and turns < self.max_context_turns:
+            row = self._id2row.get(current_id)
+            if not row:
+                break
+            ctx = f"<CTX> <USR>{row['user']}</USR> {row['text']} </CTX>"
+            total_chars += len(ctx)
+            current_id = row["reply_to"]
+            turns += 1
+
+        return total_chars
 
     def _build_sequence(self, idx: int) -> str:
         """

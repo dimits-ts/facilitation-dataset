@@ -14,7 +14,7 @@ import util.io
 EVAL_STEPS = 4000
 EPOCHS = 120
 MAX_LENGTH = 8192
-BATCH_SIZE = 32
+BATCH_SIZE = 24
 EARLY_STOP_WARMUP = 12000
 EARLY_STOP_THRESHOLD = 0.001
 EARLY_STOP_PATIENCE = 5
@@ -422,7 +422,6 @@ def main(args) -> None:
     print("Selected datasets: ", dataset_ls)
     util.classification.set_seed(util.classification.SEED)
 
-    print("Loading data...")
     df = util.io.progress_load_csv(dataset_path)
     df = util.classification.preprocess_dataset(df, dataset_ls)
     pos_weight = (df[target_label] == 0).sum() / (df[target_label] == 1).sum()
