@@ -24,7 +24,7 @@ CTX_LENGTH_COMMENTS = 4
 MODEL = "answerdotai/ModernBERT-base"
 
 
-class DiscussionModerationDataset(torch.utils.data.Dataset):
+class DiscussionDataset(torch.utils.data.Dataset):
     """
     A dataset class that dynamically creates sequences of target comment and N
     previous comments as context. The resulting strings are in XML format where
@@ -420,7 +420,7 @@ def test_model(
 
     # ── build eval datasets dict ─────────────────────────────────────────────
     def make_ds(df):
-        return DiscussionModerationDataset(
+        return DiscussionDataset(
             df.reset_index(drop=True),
             tokenizer,
             MAX_LENGTH,
@@ -552,10 +552,10 @@ def main(args) -> None:
     )
     tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
 
-    train_dataset = DiscussionModerationDataset(
+    train_dataset = DiscussionDataset(
         train_df, tokenizer, MAX_LENGTH, target_label
     )
-    val_dataset = DiscussionModerationDataset(
+    val_dataset = DiscussionDataset(
         val_df, tokenizer, MAX_LENGTH, target_label
     )
 
