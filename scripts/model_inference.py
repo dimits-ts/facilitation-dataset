@@ -26,39 +26,21 @@ import util.io
 
 BATCH_SIZE = 8
 MAX_LENGTH = 4096
-
-
-# ───────────────────────────────────── Dataset & DataLoader ──────────────────
-class _DiscussionDataset(torch.utils.data.Dataset):
-    """Map-style dataset turning a dataframe row into the combined
-    ``<CONTEXT> … <COMMENT> …`` string required by the model (done on-the-fly).
-    """
-
-    def __init__(self, df: pd.DataFrame):
-        self.df = df.reset_index(drop=True)
-
-        # id -> text lookup for fast context fetch
-        self._id2text = self.df.set_index("message_id")["text"].to_dict()
-        self._texts = self.df["text"].tolist()
-        self._reply_to = self.df["reply_to"].tolist()
-
-    def __len__(self) -> int:  # type: ignore[override]
-        return len(self._texts)
-
-    def __getitem__(self, idx: int) -> str:  # type: ignore[override]
-        context = ""
-        r_id = self._reply_to[idx]
-        if pd.notna(r_id) and r_id in self._id2text:
-            context = self._id2text[r_id]
-        return f"<CONTEXT> {context} <COMMENT> {self._texts[idx]}"
+CTX_LENGTH_COMMENTS = 4
 
 
 def _build_dataloader(
     df: pd.DataFrame, tokenizer
 ) -> torch.utils.data.DataLoader:
     """Tokenise batches on-the-fly; keeps memory footprint tiny."""
-
-    dataset = _DiscussionDataset(df)
+    df["dummy_col"] = 0
+    dataset = util.classification.DiscussionDataset(
+        df,
+        tokenizer,
+        MAX_LENGTH,
+        "dummy_col",
+        max_context_turns=CTX_LENGTH_COMMENTS,
+    )
 
     def collate_fn(batch_texts: list[str]):
         return tokenizer(
@@ -129,6 +111,7 @@ def infer_and_append(
             probs = _infer(model, device, batch)
             df_batch = annotated_df.iloc[offset:offset + len(probs)].copy()
             df_batch[output_column_name] = probs
+            df_batch = df_batch.loc[:, ["message_id", output_column_name]]
 
             write_queue.put(df_batch)
             offset += len(probs)
@@ -156,7 +139,9 @@ def main(args: argparse.Namespace) -> None:
     df = util.io.progress_load_csv(src_path)
     df = df.sort_values(by="text", key=lambda c: c.str.len(), ascending=False)
     annotated_df = util.classification.preprocess_dataset(df)
-    annotated_df = annotated_df.loc[:, ["message_id", "text"]]
+    annotated_df = annotated_df.loc[
+        :, ["message_id", "text", "user", "reply_to"]
+    ]
     if annotated_df.empty:
         print("No rows match filters - nothing to do.")
         return
