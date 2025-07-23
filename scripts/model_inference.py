@@ -23,7 +23,7 @@ from tqdm.auto import tqdm
 import util.classification
 import util.io
 
-BATCH_SIZE = 2
+BATCH_SIZE = 4
 MAX_LENGTH = 8192
 CTX_LENGTH_COMMENTS = 4
 
@@ -86,9 +86,6 @@ def infer_and_append(
     destination_dataset_path: Path,
     output_column_name: str,
 ) -> None:
-    if destination_dataset_path.exists():
-        print(f"{destination_dataset_path} already exists. Exiting ...")
-        return
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device).eval()
