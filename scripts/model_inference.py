@@ -24,16 +24,29 @@ from tqdm.auto import tqdm
 import util.classification
 import util.io
 
-BATCH_SIZE = 8
-MAX_LENGTH = 4096
+BATCH_SIZE = 4
+MAX_LENGTH = 8192
 CTX_LENGTH_COMMENTS = 4
+
+
+def sort_by_tokenized_sequence_length(
+    df, tokenizer, label_column="label", max_context_turns=5
+):
+    dataset = util.classification.DiscussionDataset(
+        df, tokenizer, MAX_LENGTH, label_column, max_context_turns
+    )
+    lengths = [dataset.length(i) for i in range(len(dataset))]
+    df = df.copy()
+    df["sequence_length"] = lengths
+    return df.sort_values(by="sequence_length", ascending=False).drop(
+        columns="sequence_length"
+    )
 
 
 def _build_dataloader(
     df: pd.DataFrame, tokenizer
 ) -> torch.utils.data.DataLoader:
     """Tokenise batches on-the-fly; keeps memory footprint tiny."""
-    df["dummy_col"] = 0
     dataset = util.classification.DiscussionDataset(
         df,
         tokenizer,
@@ -46,7 +59,7 @@ def _build_dataloader(
         return tokenizer(
             batch_texts,
             padding="longest",
-            truncation=True,
+            truncation=False,
             max_length=MAX_LENGTH,
             return_tensors="pt",
         )
@@ -135,9 +148,13 @@ def main(args: argparse.Namespace) -> None:
     model, tokenizer = load_trained_model_tokenizer(model_dir)
 
     # load & clean ─────────────────────────────────────────────────────────
-    print("Loading data...")
     df = util.io.progress_load_csv(src_path)
-    df = df.sort_values(by="text", key=lambda c: c.str.len(), ascending=False)
+    df["dummy_col"] = 0
+    print("Sorting data by sequence length...")
+    df = sort_by_tokenized_sequence_length(
+        df, tokenizer, "dummy_col", CTX_LENGTH_COMMENTS
+    )
+    print("Creating dataaset...")
     annotated_df = util.classification.preprocess_dataset(df)
     annotated_df = annotated_df.loc[
         :, ["message_id", "text", "user", "reply_to"]
