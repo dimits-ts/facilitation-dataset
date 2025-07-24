@@ -11,7 +11,7 @@ Example:
 <TRT> <USR> mod </USR> not cool man <\TRT>
 ```
 
-### Results
+### Results (test set)
 
 | Dataset     | Loss     | Accuracy | F1 Score |
 | ----------- | -------- | -------- | -------- |
@@ -23,7 +23,7 @@ Example:
 | whow        | 0.184099 | 0.934982 | 0.911557 |
 | wikitactics | 0.781466 | 0.568345 | 0.400000 |
 
-### PR curves
+### PR curves (validation set)
 
 | Threshold | Precision | Recall | F1 Score |
 | --------- | --------- | ------ | -------- |
