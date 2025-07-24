@@ -128,6 +128,7 @@ def main():
     df = discard_empty_comments(df)
     df = discard_nan_comments(df)
     df = discard_one_man_convs(df)
+    df["should_intervene"] = df.groupby("conv_id")["is_moderator"].shift(-1)  # Shift one row *up* within each conversation
     print(f"Post-processing complete. Exporting dataset to {OUTPUT_PATH}...")
     df.to_csv(OUTPUT_PATH, index=False)
     print(f"Dataset exported as {OUTPUT_PATH}")

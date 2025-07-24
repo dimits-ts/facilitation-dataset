@@ -31,7 +31,7 @@ We infer facilitative actions by whether the comment belongs in any of the follo
 
 
 ### Wikidisputes
-Since only 0.03% of the comments in the dataset are made by moderators, we mark the dataset as not supporting moderation and override its labels via classification.
+Since only 0.03% of the comments in the dataset are made by moderators, we mark the dataset as not supporting moderation.
 
 
 ### UMOD

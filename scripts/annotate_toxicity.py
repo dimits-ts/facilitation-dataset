@@ -3,6 +3,7 @@ import json
 import queue
 import threading
 import time
+import ast
 from pathlib import Path
 
 import pandas as pd
@@ -14,10 +15,6 @@ import util.io
 
 DELAY_SECS = 1.1
 BATCH_SIZE = 100
-
-
-def get_response(raw_res: dict, attribute: str):
-    return raw_res["attributeScores"][attribute]["summaryScore"]["value"]
 
 
 def get_perspective_scores(
@@ -57,8 +54,8 @@ def get_perspective_scores(
             response.raise_for_status()
             result = response.json()
 
-            toxicity = get_response(result, "TOXICITY")
-            severe_toxicity = get_response(result, "SEVERE_TOXICITY")
+            toxicity = _get_response(result, "TOXICITY")
+            severe_toxicity = _get_response(result, "SEVERE_TOXICITY")
 
             result_row = {
                 "message_id": msg_id,
@@ -90,7 +87,70 @@ def get_perspective_scores(
     writer_thread.join()
 
 
+def get_ready_df(pefk_df: pd.DataFrame) -> pd.DataFrame:
+    # Filter only the relevant datasets
+    pefk_df = pefk_df.loc[
+        pefk_df.dataset.isin(["wikiconv", "wikidisputes"]),
+        ["message_id", "dataset", "notes"],
+    ]
+
+    # Apply parsing to the notes column
+    tqdm.pandas(desc="Parsing comments")
+    pefk_df["notes"] = pefk_df["notes"].progress_apply(_safe_parse)
+
+    # Split into two datasets
+    wikiconv_df = pefk_df[pefk_df.dataset == "wikiconv"].copy()
+    wikidisputes_df = pefk_df[pefk_df.dataset == "wikidisputes"].copy()
+
+    # Normalize notes into separate DataFrames
+    wikiconv_notes_df = pd.json_normalize(wikiconv_df["notes"]).rename(
+        columns={
+            "meta.toxicity": "toxicity",
+            "meta.sever_toxicity": "severe_toxicity",
+        }
+    )
+    wikidisputes_notes_df = pd.json_normalize(wikidisputes_df["notes"])
+
+    # Drop raw notes from original DataFrames
+    wikiconv_index = wikiconv_df.drop(columns=["notes"]).message_id
+    wikidisputes_index = wikidisputes_df.drop(columns=["notes"]).message_id
+
+    # Concatenate IDs with their respective parsed notes
+    wikiconv_ready = pd.concat(
+        [wikiconv_index, wikiconv_notes_df], axis=1
+    ).dropna()
+    wikidisputes_ready = pd.concat(
+        [wikidisputes_index, wikidisputes_notes_df], axis=1
+    ).dropna()
+
+    # Combine both datasets
+    ready_df = pd.concat(
+        [wikiconv_ready, wikidisputes_ready], axis=0, ignore_index=True
+    )
+
+    # Drop rows with any missing values
+    ready_df = ready_df.dropna()
+
+    return ready_df
+
+
+def _get_response(raw_res: dict, attribute: str):
+    return raw_res["attributeScores"][attribute]["summaryScore"]["value"]
+
+
+def _safe_parse(note):
+    if not isinstance(note, str):
+        print(f"Skipping non-str row: {note} ({type(note)})")
+        return {}
+    try:
+        return ast.literal_eval(note)
+    except Exception as e:
+        print(f"Failed to parse row: {note} ({e})")
+        return {}
+
+
 def main(args):
+    output_path = Path(args.output_path)
     try:
         with open(args.api_key_file, "r") as f:
             api_key = f.read().strip()
@@ -98,16 +158,20 @@ def main(args):
         print(f"Perspective API key file not found: {args.api_key_file}")
         return
 
-    print("Loading dataset...")
     df = util.io.progress_load_csv(args.input_csv)
-    df = df.loc[
-        # exclude datasets that were already annotated with the perspective API
-        ~df.dataset.isin(["wikidisputes", "wikiconv"])
-        ["message_id", "text", "escalated"],
-    ]
+    # exclude datasets that were already annotated with the perspective API
+    perspective_df = df.loc[~df.dataset.isin(["wikidisputes", "wikiconv"])]
 
     print("Beginning scoring of comments...")
-    get_perspective_scores(df, api_key=api_key, out_path=Path(args.output_csv))
+    get_perspective_scores(
+        perspective_df, api_key=api_key, out_path=output_path
+    )
+
+    print("Processing existing toxicity annotations")
+    ready_df = get_ready_df(df)
+    ready_df.to_csv(output_path, mode="a", header=False, index=False)
+
+    print("Finished toxicity annotations")
 
 
 if __name__ == "__main__":
@@ -127,7 +191,7 @@ if __name__ == "__main__":
         help="Path to input CSV file",
     )
     parser.add_argument(
-        "--output_csv",
+        "--output_path",
         type=str,
         default="perspective_results.csv",
         help="Output path for CSV file",

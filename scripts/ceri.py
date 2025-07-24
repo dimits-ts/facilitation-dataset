@@ -46,7 +46,7 @@ def process_sheet(df: pd.DataFrame, sheet_index: int) -> pd.DataFrame:
     df["notes"] = None
     df["escalated"] = False
     df["escalation_supported"] = False
-    
+
     df = df.rename(
         {
             "COMMENT": "text",

@@ -18,8 +18,8 @@ def main():
 
     deleted_comments = df.text == "[deleted]"
     print(f"Removed {len(deleted_comments)} deleted comments")
-    df = df[~deleted_comments]    
-    
+    df = df[~deleted_comments]
+
     df.meta = df.meta.apply(lambda _dict: f"Derailment={_dict['score']}")
     df = df.rename(
         columns={
@@ -31,7 +31,7 @@ def main():
             "meta": "notes",
         }
     )
-    
+
     df["dataset"] = "cmv_awry"
     df["escalated"] = df.notes.apply(lambda x: int(x.split("=")[1]))
     threshold = df["escalated"].quantile(PERCENTILE_ESCALATION / 100)

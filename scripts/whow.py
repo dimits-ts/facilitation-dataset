@@ -47,7 +47,7 @@ def main():
 
     df["is_moderator"] = df.role == "mod"
     df["moderation_supported"] = True
-    
+
     df["user"] = df.speaker.apply(util.preprocessing.hash_to_md5)
 
     df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1

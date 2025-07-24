@@ -16,7 +16,6 @@ import argparse
 import threading
 import queue
 
-import pandas as pd
 import torch
 import transformers
 from tqdm.auto import tqdm
@@ -24,45 +23,25 @@ from tqdm.auto import tqdm
 import util.classification
 import util.io
 
-BATCH_SIZE = 8
-MAX_LENGTH = 4096
+BATCH_SIZE = 3
+MAX_LENGTH = 8192
+CTX_LENGTH_COMMENTS = 4
 
 
-# ───────────────────────────────────── Dataset & DataLoader ──────────────────
-class _DiscussionDataset(torch.utils.data.Dataset):
-    """Map-style dataset turning a dataframe row into the combined
-    ``<CONTEXT> … <COMMENT> …`` string required by the model (done on-the-fly).
-    """
-
-    def __init__(self, df: pd.DataFrame):
-        self.df = df.reset_index(drop=True)
-
-        # id -> text lookup for fast context fetch
-        self._id2text = self.df.set_index("message_id")["text"].to_dict()
-        self._texts = self.df["text"].tolist()
-        self._reply_to = self.df["reply_to"].tolist()
-
-    def __len__(self) -> int:  # type: ignore[override]
-        return len(self._texts)
-
-    def __getitem__(self, idx: int) -> str:  # type: ignore[override]
-        context = ""
-        r_id = self._reply_to[idx]
-        if pd.notna(r_id) and r_id in self._id2text:
-            context = self._id2text[r_id]
-        return f"<CONTEXT> {context} <COMMENT> {self._texts[idx]}"
+def sort_dataset_by_tokenized_sequence_length(dataset):
+    lengths = [dataset.length(i) for i in range(len(dataset))]
+    dataset.df["sequence_length"] = lengths
+    dataset.df = dataset.df.sort_values(
+        by="sequence_length", ascending=False
+    ).drop(columns="sequence_length")
+    return dataset
 
 
-def _build_dataloader(
-    df: pd.DataFrame, tokenizer
-) -> torch.utils.data.DataLoader:
-    """Tokenise batches on-the-fly; keeps memory footprint tiny."""
-
-    dataset = _DiscussionDataset(df)
-
-    def collate_fn(batch_texts: list[str]):
+def _build_dataloader(dataset, tokenizer) -> torch.utils.data.DataLoader:
+    def collate_fn(batch_items: list[dict]):
+        texts = [item["text"] for item in batch_items]
         return tokenizer(
-            batch_texts,
+            texts,
             padding="longest",
             truncation=True,
             max_length=MAX_LENGTH,
@@ -71,8 +50,8 @@ def _build_dataloader(
 
     return torch.utils.data.DataLoader(
         dataset,
-        batch_size=BATCH_SIZE,  # a little headroom
-        shuffle=False,  # preserve order
+        batch_size=BATCH_SIZE,
+        shuffle=False,
         collate_fn=collate_fn,
         num_workers=1,
         pin_memory=torch.cuda.is_available(),
@@ -101,19 +80,17 @@ def _infer(model, device: str, batch):
 
 # offload IO writing to async thread
 def infer_and_append(
-    annotated_df: pd.DataFrame,
+    dataset,
     model,
     tokenizer,
     destination_dataset_path: Path,
     output_column_name: str,
 ) -> None:
-    if destination_dataset_path.exists():
-        print(f"{destination_dataset_path} already exists. Exiting ...")
-        return
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model.to(device).eval()
-    dataloader = _build_dataloader(annotated_df, tokenizer)
+
+    dataloader = _build_dataloader(dataset, tokenizer)
 
     write_queue = queue.Queue(maxsize=8)
     writer_thread = threading.Thread(
@@ -127,13 +104,13 @@ def infer_and_append(
         offset = 0
         for batch in tqdm(dataloader, desc="Running inference", leave=False):
             probs = _infer(model, device, batch)
-            df_batch = annotated_df.iloc[offset:offset + len(probs)].copy()
+            df_batch = dataset.df.iloc[offset:offset + len(probs)].copy()
             df_batch[output_column_name] = probs
-
+            df_batch = df_batch.loc[:, ["message_id", output_column_name]]
             write_queue.put(df_batch)
             offset += len(probs)
 
-    write_queue.put(None)  # Sentinel to signal writer to finish
+    write_queue.put(None)
     writer_thread.join()
 
 
@@ -152,24 +129,34 @@ def main(args: argparse.Namespace) -> None:
     model, tokenizer = load_trained_model_tokenizer(model_dir)
 
     # load & clean ─────────────────────────────────────────────────────────
-    print("Loading data...")
     df = util.io.progress_load_csv(src_path)
-    df = df.sort_values(by="text", key=lambda c: c.str.len(), ascending=False)
-    annotated_df = util.classification.preprocess_dataset(df)
-    annotated_df = annotated_df.loc[:, ["message_id", "text"]]
-    if annotated_df.empty:
+    df["dummy_col"] = 0
+    df = util.classification.preprocess_dataset(df)
+
+    if df.empty:
         print("No rows match filters - nothing to do.")
         return
 
-    # inference ────────────────────────────────────────────────────────────
+    print("Creating dataset...")
+    dataset = util.classification.DiscussionDataset(
+        df,
+        tokenizer,
+        MAX_LENGTH,
+        label_column="dummy_col",
+        max_context_turns=CTX_LENGTH_COMMENTS,
+    )
+
+    print("Sorting data by sequence length...")
+    dataset = sort_dataset_by_tokenized_sequence_length(dataset)
+
+    # Inference
     infer_and_append(
-        annotated_df=annotated_df,
+        dataset=dataset,
         model=model,
         tokenizer=tokenizer,
         destination_dataset_path=dst_path,
         output_column_name=output_column_name,
     )
-
     print("Dataset written to", dst_path)
 
 
@@ -201,7 +188,7 @@ if __name__ == "__main__":
         "--output_column_name",
         type=str,
         required=True,
-        choices=["mod_probabilities", "escalation_probabilities"],
+        choices=["mod_probabilities", "should_intervene_probabilities"],
         help="How to name the new inferred column",
     )
 

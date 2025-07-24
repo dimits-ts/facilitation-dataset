@@ -5,6 +5,7 @@ import random
 import pandas as pd
 import torch
 import transformers
+import sklearn.metrics
 
 import util.classification
 import util.io
@@ -12,74 +13,15 @@ import util.io
 
 EVAL_STEPS = 4000
 EPOCHS = 120
-MAX_LENGTH = 4096
-BATCH_SIZE = 48
+MAX_LENGTH = 8192
+BATCH_SIZE = 24
 EARLY_STOP_WARMUP = 12000
 EARLY_STOP_THRESHOLD = 0.001
 EARLY_STOP_PATIENCE = 5
 FINETUNE_ONLY_HEAD = True
 TEST_METRICS = {"loss", "accuracy", "f1"}
+CTX_LENGTH_COMMENTS = 4
 MODEL = "answerdotai/ModernBERT-base"
-
-
-class DiscussionModerationDataset(torch.utils.data.Dataset):
-    """
-    Map-style dataset that, on-the-fly, builds the
-    "<CONTEXT> … <COMMENT> …" sequence *and* returns the label.
-
-    • Text is tokenised lazily so no big tensor object sits in RAM.
-    • Outputs are Python lists; a DataCollatorWithPadding will
-      pad and convert to tensors batch-wise.
-    """
-
-    def __init__(
-        self,
-        df: pd.DataFrame,
-        tokenizer: transformers.PreTrainedTokenizerBase,
-        max_length: int,
-        label_column: str,
-    ):
-        self.df = df.reset_index(drop=True)
-        self.tokenizer = tokenizer
-        self.max_length = max_length
-        self.label_column = label_column
-
-        # fast look-up:  message_id → raw text
-        self._id2text = self.df.set_index("message_id")["text"].to_dict()
-        self._texts = self.df["text"].tolist()
-        self._reply_to = self.df["reply_to"].tolist()
-        self._labels = self.df[self.label_column].astype(float).tolist()
-
-        # pre-compute lengths, since the text will be tokenized later
-        self._lengths = []
-        for txt, rep_id in zip(self._texts, self._reply_to):
-            ctx = self._id2text.get(rep_id, "") if pd.notna(rep_id) else ""
-            seq = f"<CONTEXT> {ctx} <COMMENT> {txt}"
-            # length *after* adding special tokens, truncation etc.
-            n_tokens = len(
-                self.tokenizer.encode(
-                    seq,
-                    add_special_tokens=True,
-                    truncation=True,
-                    max_length=max_length,
-                )
-            )
-            self._lengths.append(n_tokens)
-
-    def length(self, idx: int) -> int:
-        return self._lengths[idx]
-
-    def __len__(self):  # type: ignore[override]
-        return len(self._texts)
-
-    def __getitem__(self, idx):  # type: ignore[override]
-        row = self.df.iloc[idx]
-        reply_to_id = row["reply_to"]
-        context = (
-            self._id2text.get(reply_to_id, "") if pd.notna(reply_to_id) else ""
-        )
-        text = f"<CONTEXT> {context} <COMMENT> {row['text']}"
-        return {"text": text, "label": float(row[self.label_column])}
 
 
 class WeightedLossTrainer(transformers.Trainer):
@@ -124,7 +66,7 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
     def __iter__(self):
         # -- bucketed indices, then shuffle buckets --
         batches = [
-            self.sorted_indices[i:i + self.batch_size]
+            self.sorted_indices[i : i + self.batch_size]
             for i in range(0, len(self.sorted_indices), self.batch_size)
         ]
         if self.drop_last and len(batches[-1]) < self.batch_size:
@@ -142,7 +84,7 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
 class BucketedTrainer(WeightedLossTrainer):
     """
     Overrides get_train_dataloader() and get_eval_dataloader()
-    so Trainer uses our bucketed sampler for train and default sampler 
+    so Trainer uses our bucketed sampler for train and default sampler
     + collate_fn for eval.
     """
 
@@ -340,7 +282,7 @@ def test_model(
     output_dir: Path,
     test_df: pd.DataFrame,
     tokenizer: transformers.PreTrainedTokenizerBase,
-    label_column: str
+    label_column: str,
 ) -> pd.DataFrame:
     """
     Evaluate best checkpoint on each dataset and on the full test split.
@@ -360,11 +302,12 @@ def test_model(
 
     # ── build eval datasets dict ─────────────────────────────────────────────
     def make_ds(df):
-        return DiscussionModerationDataset(
+        return util.classification.DiscussionDataset(
             df.reset_index(drop=True),
             tokenizer,
             MAX_LENGTH,
-            label_column=label_column
+            label_column=label_column,
+            max_context_turns=CTX_LENGTH_COMMENTS,
         )
 
     eval_dict = {name: make_ds(df) for name, df in test_df.groupby("dataset")}
@@ -392,6 +335,67 @@ def test_model(
     return res_df
 
 
+def precision_recall_table(
+    model_dir: Path,
+    dataset: torch.utils.data.Dataset,
+    tokenizer,
+    thresholds: list[float],
+):
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        model_dir,
+        reference_compile=False,
+        attn_implementation="eager",
+        num_labels=1,
+        problem_type="multi_label_classification",
+    )
+    model.eval()
+    model.to("cuda" if torch.cuda.is_available() else "cpu")
+
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=BATCH_SIZE,
+        collate_fn=lambda b: collate_fn(tokenizer, b),
+        shuffle=False,
+        num_workers=4,
+        pin_memory=torch.cuda.is_available(),
+    )
+
+    all_logits = []
+    all_labels = []
+    with torch.no_grad():
+        for batch in dataloader:
+            labels = batch["labels"]
+            inputs = {
+                k: v.to(model.device)
+                for k, v in batch.items()
+                if k != "labels"
+            }
+            outputs = model(**inputs)
+            logits = outputs.logits.squeeze(-1).cpu()
+            all_logits.extend(torch.sigmoid(logits).numpy())
+            all_labels.extend(labels.squeeze(-1).cpu().numpy())
+
+    data = []
+    for t in thresholds:
+        preds = [1 if p >= t else 0 for p in all_logits]
+        precision, recall, f1, _ = (
+            sklearn.metrics.precision_recall_fscore_support(
+                all_labels, preds, average="binary", zero_division=0
+            )
+        )
+        data.append(
+            {
+                "threshold": t,
+                "precision": precision,
+                "recall": recall,
+                "f1": f1,
+            }
+        )
+
+    df = pd.DataFrame(data).round(4)
+    return df
+
+
 def collate_fn(tokenizer, batch: list[dict[str, str | float]]):
     texts = [b["text"] for b in batch]
     labels = torch.tensor([b["label"] for b in batch]).unsqueeze(1)
@@ -399,7 +403,7 @@ def collate_fn(tokenizer, batch: list[dict[str, str | float]]):
     enc = tokenizer(
         texts,
         padding="longest",
-        truncation=True,
+        truncation=False,
         max_length=MAX_LENGTH,
         return_tensors="pt",
     )
@@ -418,9 +422,12 @@ def main(args) -> None:
     print("Selected datasets: ", dataset_ls)
     util.classification.set_seed(util.classification.SEED)
 
-    print("Loading data...")
     df = util.io.progress_load_csv(dataset_path)
     df = util.classification.preprocess_dataset(df, dataset_ls)
+    # remove comment if should_intervene is the target
+    # (only case where NaNs should exist)
+    df = df.dropna(subset=target_label)
+
     pos_weight = (df[target_label] == 0).sum() / (df[target_label] == 1).sum()
 
     train_df, val_df, test_df = util.classification._train_validate_test_split(
@@ -431,11 +438,19 @@ def main(args) -> None:
     )
     tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
 
-    train_dataset = DiscussionModerationDataset(
-        train_df, tokenizer, MAX_LENGTH, target_label
+    train_dataset = util.classification.DiscussionDataset(
+        train_df,
+        tokenizer,
+        MAX_LENGTH,
+        target_label,
+        max_context_turns=CTX_LENGTH_COMMENTS,
     )
-    val_dataset = DiscussionModerationDataset(
-        val_df, tokenizer, MAX_LENGTH, target_label
+    val_dataset = util.classification.DiscussionDataset(
+        val_df,
+        tokenizer,
+        MAX_LENGTH,
+        target_label,
+        max_context_turns=CTX_LENGTH_COMMENTS,
     )
 
     if not only_test:
@@ -456,15 +471,29 @@ def main(args) -> None:
         output_dir=output_dir,
         test_df=test_df,
         tokenizer=tokenizer,
-        label_column=target_label
+        label_column=target_label,
     )
 
     print("\n=== Results ===")
     print(res_df)
-
     logs_path = logs_dir / "res.csv"
     res_df.to_csv(logs_path)
     print(f"Results saved to {logs_path}")
+
+    print("\n=== PR-curves ===")
+    best_model_dir = output_dir / "best_model"
+    res_path = logs_dir / "pr_curves.csv"
+    pr_df = precision_recall_table(
+        model_dir=best_model_dir,
+        dataset=val_dataset,
+        tokenizer=tokenizer,
+        thresholds=[
+            round(t, 2) for t in list(torch.linspace(0.0, 1.0, 21).numpy())
+        ],
+    )
+    print(pr_df)
+    pr_df.to_csv(res_path, index=False)
+    print(f"PR curves saved to {res_path}")
 
 
 if __name__ == "__main__":
@@ -502,9 +531,8 @@ if __name__ == "__main__":
         "--target_label",
         type=str,
         default="is_moderator",
-        choices=["is_moderator", "escalated"],
+        choices=["is_moderator", "should_intervene"],
         help="Which column to use as the target label",
     )
-
     args = parser.parse_args()
     main(args)
