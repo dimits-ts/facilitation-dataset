@@ -37,7 +37,8 @@ cd facilitation-dataset
 conda env create -f environment.yml
 conda activate pefk-dataset
 
-bash create_dataset.sh
+bash create_base_dataset.sh # data only contained inside the datasets OR
+# bash create_augmented_dataset.sh # includes ``Inferred'' data (see Table below)
 ```
 
 ## Important Notes

@@ -5,6 +5,7 @@ logs*/
 checkpoints/
 *.csv
 *.key
+dialogue-quality-measures/
 
 
 # Byte-compiled / optimized / DLL files
