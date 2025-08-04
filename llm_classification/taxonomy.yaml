@@ -212,23 +212,52 @@ park_et_al_2012:
       - "What do others think about this proposal?"
       - "You might consider responding to Jane's point above—she raises a similar concern."
 
-seering_2020:
-  Helping Hands:
+fora:
+  Expressing Appreciation:
     description: >
-      Moderators who assist users by answering questions, resolving confusion, and offering support to facilitate participation.
-      Their goal is to increase accessibility and comfort for all community members.
+      Show gratitude for a participant’s contribution or presence in the discussion.
+    examples:
+      - "Thanks for sharing that."
+      - "Alright, great, now do I have everyone? Appreciated. Sure. Let’s move on."
 
-  Justice Enforcers:
+  Expressing Agreement:
     description: >
-      Moderators who enforce community rules and values by actively removing or correcting behavior that violates norms,
-      such as hate speech, harassment, or offensive content.
+      Indicate alignment with a participant’s statement or perspective.
+    examples:
+      - "Definitely. I hear you."
+      - "I agree. I keep hearing that in these conversations."
 
-  Surveillance Units:
+  Open Invitation to Participate:
     description: >
-      Moderators who monitor activity in the background, often silently watching for violations or disruptions. 
-      They may not always engage directly but ensure order is maintained.
+      Invite any participant to contribute without addressing a specific individual.
+    examples:
+      - "Alright with that being said, does anyone want to kick us off?"
+      - "Ok great. Now anyone who wants to go next can unmute."
 
-  Conversationalists:
+  Specific Invitation to Participate:
     description: >
-      Moderators who actively participate in and guide conversations to encourage meaningful, lively, and respectful dialogue.
-      Their primary goal is to build community through interaction.
+      Invite a specific participant to speak, often by name or acknowledgement of a gesture.
+    examples:
+      - "Kelly? Did you want to go next?"
+      - "Oh, Joe? I see you’re raising your hand. Are you ready to go?"
+
+  Modeling Example Response:
+    description: >
+      Demonstrate an example answer to guide participants in responding to a question or prompt.
+    examples:
+      - "So first we are going to give introductions and then share a value that’s important to us. I’ll kick us off. I’m Kelly and a value that’s important to me is courage."
+      - "Some people are confused in this stage so I’ll give you an example. My grandmother lived next door to us when I was growing up..."
+
+  Follow-Up Question:
+    description: >
+      Ask an additional question to a participant to deepen or clarify their contribution.
+    examples:
+      - "Wow, Kelly, that’s such a touching story. Did you ever find out who sent the package?"
+
+  Making Connections:
+    description: >
+      Link one participant’s comment or story to another participant’s contribution or a prior discussion topic.
+    examples:
+      - "That’s similar to what Jamie shared earlier, right?"
+      - "I have a similar experience that resonates."
+      - "That connects to what we were discussing earlier."
