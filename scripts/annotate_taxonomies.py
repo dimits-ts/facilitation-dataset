@@ -19,7 +19,7 @@ MAX_COMMENT_CTX = 2
 NUM_COMMENT_SAMPLE = 16_000
 MIN_CHARACTERS = 10
 
-logger = logging.getLogger(Path(__file__).name)
+logger = logging.getLogger(__name__)
 
 
 class Comment:
@@ -83,7 +83,10 @@ def setup_logging(logs_dir: Path):
 
     # Apply coloredlogs only to console output
     coloredlogs.install(
-        level="INFO", logger=root_logger, fmt="%(asctime)s %(levelname)-8s %(message)s", stream=stream_handler.stream
+        level="INFO",
+        logger=root_logger,
+        fmt="%(asctime)s %(levelname)-8s %(message)s",
+        stream=stream_handler.stream,
     )
 
     logging.captureWarnings(True)
@@ -150,40 +153,31 @@ def select_mod_ids(
     mod_threshold: float,
     mod_probability_file: Path,
 ) -> pd.Series:
-    full_corpus.text = full_corpus.text.astype(str)
-    full_corpus.dataset = full_corpus.dataset.map(
-        {
-            "wikiconv": "wikipedia",
-            "wikitactics": "wikipedia",
-            "wikidisputes": "wikipedia",
-        }
-    )
-
     # Load mod probability file and filter for inferred moderator comments
     mod_prob_df = util.io.progress_load_csv(mod_probability_file)
     high_conf_ids = set(
         mod_prob_df.loc[
-            mod_prob_df["mod_probabilities"].astype(float) >= mod_threshold,
+            mod_prob_df.mod_probabilities.astype(float) >= mod_threshold,
             "message_id",
         ].dropna()
     )
 
     # Moderator-supported comments (true moderators)
     mod_comments = full_corpus[
-        (full_corpus.get("is_moderator", False))
-        & (full_corpus.get("mod_supported", False))
+        (full_corpus.is_moderator) & (full_corpus.moderation_supported)
     ]
 
     # Inferred moderator comments: non-moderators whose message_id is in high_conf_ids
     inferred_mod_comments = full_corpus[
-        (~full_corpus.get("is_moderator", False))
-        & (full_corpus["message_id"].isin(high_conf_ids))
+        (~full_corpus.moderation_supported)
+        & (full_corpus.message_id.isin(high_conf_ids))
     ]
 
     selected = pd.concat(
         [mod_comments, inferred_mod_comments], ignore_index=True
     )
     selected = selected[selected.text.str.len() > MIN_CHARACTERS]
+    print(selected.dataset.value_counts())
     stratified_sample = selected.groupby("dataset").sample(
         n=NUM_COMMENT_SAMPLE, random_state=42
     )
@@ -287,7 +281,7 @@ def process_tactic(
         )
         if first_print:
             logger.info("Prompt used: " + prompt)
-            first_print=False
+            first_print = False
 
         is_match = comment_is_tactic(prompt=prompt, generator=generator)
         results.append({"message_id": message_id, "is_match": is_match})
@@ -314,8 +308,8 @@ def comment_is_tactic(prompt: str, generator) -> bool:
         res = output[0]["generated_text"][len(prompt) :].strip().lower()
         res = parse_response(res)
         return res
-    except Exception:
-        logger.exception("")
+    except Exception as e:
+        logger.exception("Error during model inference: %s", e)
         return False
 
 
@@ -340,7 +334,7 @@ def parse_response(res: str) -> bool:
     if res.startswith("n"):
         return False
 
-    logger.error("Non-standard answer detected: {res}")
+    logger.error(f"Non-standard answer detected: {res}")
     return False
 
 
@@ -354,6 +348,17 @@ def main(args):
     util.classification.set_seed(42)
 
     full_corpus = util.io.progress_load_csv(args.dataset_file)
+    full_corpus.text = full_corpus.text.astype(str)
+    full_corpus.dataset = full_corpus.dataset.replace(
+        {
+            "wikiconv": "wikipedia",
+            "wikitactics": "wikipedia",
+            "wikidisputes": "wikipedia",
+        }
+    )
+    print(full_corpus.dataset.unique())
+    print(full_corpus.dataset.value_counts())
+
     classifiable_ids = select_mod_ids(
         full_corpus,
         mod_threshold=args.mod_probability_thres,
@@ -381,9 +386,9 @@ def main(args):
             output_dir=output_dir,
             generator=generator,
         )
-    except:
-        logger.critical("Critical error encountered. Exiting...")
-        logger.exception("")
+    except Exception as e:
+        logger.critical("Critical error encountered. Exiting... %s", e)
+        logger.exception("Traceback:")
         sys.exit(1)
 
 
