@@ -11,10 +11,14 @@ import coloredlogs
 from tqdm.auto import tqdm
 
 import util.io
+import util.classification
 
 
-MODEL_NAME = "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"  # placeholder
-MAX_COMMENT_CTX = 2  # number of parent comments to include in context
+MODEL_NAME = "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"
+MAX_COMMENT_CTX = 2
+NUM_COMMENT_SAMPLE = 4000
+MIN_CHARACTERS = 10
+
 logger = logging.getLogger(Path(__file__).name)
 
 
@@ -131,11 +135,20 @@ def fetch_context_chain_comments(
     return context
 
 
-def process_data(
+def select_mod_ids(
     full_corpus: pd.DataFrame,
     mod_threshold: float,
     mod_probability_file: Path,
 ) -> pd.Series:
+    full_corpus.text = full_corpus.text.astype(str)
+    full_corpus.dataset = full_corpus.dataset.map(
+        {
+            "wikiconv": "wikipedia",
+            "wikitactics": "wikipedia",
+            "wikidisputes": "wikipedia",
+        }
+    )
+
     # Load mod probability file and filter for inferred moderator comments
     mod_prob_df = util.io.progress_load_csv(mod_probability_file)
     high_conf_ids = set(
@@ -160,7 +173,11 @@ def process_data(
     selected = pd.concat(
         [mod_comments, inferred_mod_comments], ignore_index=True
     )
-    return selected["message_id"].dropna().astype(str)
+    selected = selected[selected.text.str.len() > MIN_CHARACTERS]
+    stratified_sample = selected.groupby("dataset").sample(
+        n=NUM_COMMENT_SAMPLE, random_state=42
+    )
+    return stratified_sample["message_id"].dropna().astype(str)
 
 
 def process_all_taxonomies(
@@ -224,12 +241,11 @@ def process_tactic(
     examples = tactic.get("examples")
 
     # Build lookup from full corpus so context chain is intact
-    # TODO: delete
-    lookup = build_comment_lookup(full_corpus.head(20000))
+    lookup = build_comment_lookup(full_corpus)
 
     # Filter the rows of full_corpus to only those we should classify
     to_classify = full_corpus[
-        full_corpus["message_id"].astype(str).isin(set(classifiable_ids))
+        full_corpus["message_id"].astype(str).isin(classifiable_ids)
     ]
 
     logger.info("Starting inference")
@@ -321,12 +337,16 @@ def main(args):
     logs_dir = Path(args.logs_dir)
 
     setup_logging(logs_dir=logs_dir)
+    util.classification.set_seed(42)
 
     full_corpus = util.io.progress_load_csv(args.dataset_file)
-    classifiable_ids = process_data(
+    classifiable_ids = select_mod_ids(
         full_corpus,
         mod_threshold=args.mod_probability_thres,
         mod_probability_file=Path(args.mod_probability_file),
+    )
+    logger.info(
+        f"Selected {len(classifiable_ids)} random comments for annotation."
     )
 
     # Load model and tokenizer once
