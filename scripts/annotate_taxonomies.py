@@ -1,12 +1,14 @@
 import argparse
 from pathlib import Path
 import yaml
+
+import transformers
 import pandas as pd
 from tqdm.auto import tqdm
 
 import util.io
 
-MODEL_NAME = "gpt2"  # placeholder
+MODEL_NAME = "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"  # placeholder
 MAX_COMMENT_CTX = 2  # number of parent comments to include in context
 
 
@@ -31,30 +33,24 @@ class ClassifiableComment(Comment):
         return f"{context}\nComment to be classified:\n{super().__str__()}"
 
 
-def create_prompt(
+def create_prompt_from_input(
     instructions: str,
     category_name: str,
     description: str,
     examples: list[str],
-    comment: str,
-    context: list[str],
+    input_str: str,
 ) -> str:
     """
     Fill the instruction/template file by replacing:
-      - {{category_name}}, {{description}}, {{examples}}
-      - <COMMENT>, <CONTEXT>
+      - {{category_name}}, {{description}}, {{examples}}, {{input}}
     Examples are joined with newlines and prefixed with '- '.
-    If multiple context comments are provided, they are joined with double newlines.
     """
-    # Prepare replacements
     examples_formatted = "\n".join(f"- {ex.strip()}" for ex in examples)
-    context_text = "\n\n".join(c.strip() for c in context) if context else ""
     prompt = instructions
     prompt = prompt.replace("{{category_name}}", category_name)
     prompt = prompt.replace("{{description}}", description.strip())
     prompt = prompt.replace("{{examples}}", examples_formatted)
-    prompt = prompt.replace("<CONTEXT>", context_text)
-    prompt = prompt.replace("<COMMENT>", comment.strip())
+    prompt = prompt.replace("{{input}}", input_str.strip())
     return prompt
 
 
@@ -68,9 +64,9 @@ def build_comment_lookup(df: pd.DataFrame) -> dict:
     return lookup
 
 
-def fetch_context_chain(
+def fetch_context_chain_comments(
     comment_row: dict, lookup: dict, max_depth: int
-) -> list[str]:
+) -> list[Comment]:
     context = []
     current = comment_row
     depth = 0
@@ -81,14 +77,20 @@ def fetch_context_chain(
         parent = lookup.get(parent_id)
         if not parent:
             break
-        context.append(parent.get("message", ""))
+        # wrap parent as a Comment
+        parent_comment = Comment(
+            comment=parent.get("text"), user=parent.get("user", "")
+        )
+        context.append(parent_comment)
         current = parent
         depth += 1
     return context
 
 
 def process_data(
-    data: pd.DataFrame, mod_threshold: float, mod_probability_file: Path
+    data: pd.DataFrame,
+    mod_threshold: float,
+    mod_probability_file: Path,
 ) -> pd.DataFrame:
     # Load mod probability file and filter for inferred moderator comments
     mod_prob_df = util.io.progress_load_csv(mod_probability_file)
@@ -121,10 +123,16 @@ def process_all_taxonomies(
     data: pd.DataFrame,
     instructions: str,
     output_dir: Path,
+    generator,
 ) -> None:
-    for tax_name, taxonomy in tqdm(taxonomies.items(), desc="All Taxonomies"):
+    for tax_name, taxonomy in tqdm(taxonomies.items(), desc="Taxonomies"):
         process_single_taxonomy(
-            tax_name, taxonomy, data, instructions, output_dir
+            tax_name=tax_name,
+            taxonomy=taxonomy,
+            data=data,
+            instructions=instructions,
+            output_dir=output_dir,
+            generator=generator,
         )
 
 
@@ -134,12 +142,19 @@ def process_single_taxonomy(
     data: pd.DataFrame,
     instructions: str,
     output_dir: Path,
+    generator,
 ) -> None:
     for tactic_name, tactic in tqdm(
         taxonomy.items(), desc=f"Taxonomy: {tax_name}"
     ):
         process_tactic(
-            tax_name, tactic_name, tactic, data, instructions, output_dir
+            tax_name=tax_name,
+            tactic_name=tactic_name,
+            tactic=tactic,
+            data=data,
+            instructions=instructions,
+            output_dir=output_dir,
+            generator=generator,
         )
 
 
@@ -150,52 +165,70 @@ def process_tactic(
     data: pd.DataFrame,
     instructions: str,
     output_dir: Path,
+    generator,
 ) -> None:
-    description = tactic.get("Description", "")
-    examples = tactic.get("Examples", [])
+    description = tactic.get("description", "")
+    examples = tactic.get("examples", [])
     lookup = build_comment_lookup(data)
     results = []
+
     for _, row in tqdm(
         data.iterrows(),
         total=len(data),
         leave=False,
-        desc=f"Processing tactic: {tactic_name}",
+        desc=f"Tactic: {tactic_name}",
     ):
         message_id = row.get("message_id")
-        comment_text = row.get("message", "")
-        user = row.get("user", "unknown")
-        context_texts = fetch_context_chain(
+        # Build classifiable comment with its context chain as Comment objects
+        context_comments = fetch_context_chain_comments(
             row.to_dict(), lookup, MAX_COMMENT_CTX
         )
-        prompt = create_prompt(
+        # The user field key might differ; adjust if necessary (e.g., 'user_id' or 'author')
+        user = row.get("user", "unknown")
+        comment_text = row.get("text")
+        classifiable = ClassifiableComment(
+            comment=comment_text, user=user, context=context_comments
+        )
+
+        # Use its string representation as the {{input}} for the template
+        input_str = str(classifiable)
+        prompt = create_prompt_from_input(
             instructions=instructions,
             category_name=tactic_name,
             description=description,
             examples=examples,
-            comment=comment_text,
-            context=context_texts,
+            input_str=input_str,
         )
+        print(prompt)
 
-        is_match = comment_is_tactic(prompt=prompt)
-        results.append(
-            {
-                "message_id": message_id,
-                "is_match": is_match,
-                "comment": comment_text,
-                "user": user,
-            }
-        )
+        is_match = comment_is_tactic(prompt=prompt, generator=generator)
+        results.append({"message_id": message_id, "is_match": is_match})
+
     output_dir.mkdir(parents=True, exist_ok=True)
-    out_file = output_dir / f"{tax_name}__{tactic_name}.csv"
-    pd.DataFrame(results).to_csv(out_file, index=False)
+    out_file = output_dir / f"{tax_name.strip()}.{tactic_name.strip()}.csv"
+    pd.DataFrame(results, columns=["message_id", "is_match"]).to_csv(
+        out_file, index=False
+    )
 
 
-def comment_is_tactic(prompt: str) -> bool:
-    # Placeholder heuristic. Replace with real LLM inference.
-    lowered = prompt.lower()
-    if "harass" in lowered or "attack" in lowered:
-        return True
-    return False
+def comment_is_tactic(prompt: str, generator) -> bool:
+    """
+    Uses the transformers pipeline to ask the model. Expects the model to answer with 'yes' or 'no'.
+    Parses the first clear yes/no.
+    """
+    try:
+        output = generator(
+            prompt,
+            max_new_tokens=10,
+            do_sample=False,  # deterministic
+        )
+        # pipeline returns list with generated_text
+        res = output[0]["generated_text"][len(prompt) :].strip().lower()
+        res = parse_response(res)
+        return res
+    except Exception as e:
+        print("Exception occurred during inference: ", e)
+        return False
 
 
 def load_yaml(path: Path) -> dict:
@@ -206,6 +239,21 @@ def load_yaml(path: Path) -> dict:
 def load_instructions(path: Path) -> str:
     with open(path, "r", encoding="utf-8") as f:
         return f.read()
+
+
+def parse_response(res: str) -> bool:
+    if res.startswith("yes"):
+        return True
+    if res.startswith("no"):
+        return False
+    # sometimes model replies like "yes." or "nope" or "no."
+    if res.startswith("y"):
+        return True
+    if res.startswith("n"):
+        return False
+
+    print("Non-standard answer detected: {res}")
+    return False
 
 
 def main(args):
@@ -220,7 +268,18 @@ def main(args):
         mod_probability_file=Path(args.mod_probability_file),
     )
 
-    process_all_taxonomies(taxonomy_dict, df, instructions, output_dir)
+    # Load model and tokenizer once
+    tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL_NAME)
+    model = transformers.AutoModelForCausalLM.from_pretrained(
+        MODEL_NAME, device_map="auto"
+    )
+    generator = transformers.TextGenerationPipeline(
+        model=model, tokenizer=tokenizer
+    )
+
+    process_all_taxonomies(
+        taxonomy_dict, df, instructions, output_dir, generator=generator
+    )
 
 
 if __name__ == "__main__":
