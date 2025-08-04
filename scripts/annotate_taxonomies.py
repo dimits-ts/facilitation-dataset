@@ -16,7 +16,7 @@ import util.classification
 
 MODEL_NAME = "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"
 MAX_COMMENT_CTX = 2
-NUM_COMMENT_SAMPLE = 4000
+NUM_COMMENT_SAMPLE = 16_000
 MIN_CHARACTERS = 10
 
 logger = logging.getLogger(Path(__file__).name)
@@ -37,7 +37,7 @@ class Comment:
 class ClassifiableComment(Comment):
     def __init__(self, comment: str, user: str, context: list[Comment]):
         super().__init__(comment=comment, user=user)
-        self.context = context
+        self.context = context if context is not None else []
 
     def __str__(self):
         ctx_strs = [f"{c.user}: {c.comment}" for c in self.context]
@@ -132,7 +132,7 @@ def fetch_context_chain_comments(
         context.append(parent_comment)
         current = parent
         depth += 1
-    return context
+    return context.reverse()
 
 
 def select_mod_ids(
