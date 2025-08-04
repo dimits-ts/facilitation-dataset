@@ -20,3 +20,4 @@ dependencies:
       - torch
       - transformers
       - tensorboard
+      - bitsandbytes

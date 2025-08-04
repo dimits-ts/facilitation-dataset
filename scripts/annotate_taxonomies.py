@@ -56,7 +56,7 @@ def create_prompt_from_input(
 
 def build_comment_lookup(df: pd.DataFrame) -> dict:
     lookup = {}
-    for _, row in df.iterrows():
+    for _, row in tqdm(df.iterrows(), total=len(df), desc="Processing comments", leave=False):
         msg_id = row.get("message_id")
         if pd.isna(msg_id):
             continue
@@ -88,10 +88,10 @@ def fetch_context_chain_comments(
 
 
 def process_data(
-    data: pd.DataFrame,
+    full_corpus: pd.DataFrame,
     mod_threshold: float,
     mod_probability_file: Path,
-) -> pd.DataFrame:
+) -> pd.Series:
     # Load mod probability file and filter for inferred moderator comments
     mod_prob_df = util.io.progress_load_csv(mod_probability_file)
     high_conf_ids = set(
@@ -102,25 +102,27 @@ def process_data(
     )
 
     # Moderator-supported comments (true moderators)
-    mod_comments = data[
-        (data.get("is_moderator", False)) & (data.get("mod_supported", False))
+    mod_comments = full_corpus[
+        (full_corpus.get("is_moderator", False))
+        & (full_corpus.get("mod_supported", False))
     ]
 
     # Inferred moderator comments: non-moderators whose message_id is in high_conf_ids
-    inferred_mod_comments = data[
-        (~data.get("is_moderator", False))
-        & (data["message_id"].isin(high_conf_ids))
+    inferred_mod_comments = full_corpus[
+        (~full_corpus.get("is_moderator", False))
+        & (full_corpus["message_id"].isin(high_conf_ids))
     ]
 
     selected = pd.concat(
         [mod_comments, inferred_mod_comments], ignore_index=True
     )
-    return selected
+    return selected["message_id"].dropna().astype(str)
 
 
 def process_all_taxonomies(
     taxonomies: dict[str, dict],
-    data: pd.DataFrame,
+    full_corpus: pd.DataFrame,
+    classifiable_ids: pd.Series,
     instructions: str,
     output_dir: Path,
     generator,
@@ -129,7 +131,8 @@ def process_all_taxonomies(
         process_single_taxonomy(
             tax_name=tax_name,
             taxonomy=taxonomy,
-            data=data,
+            full_corpus=full_corpus,
+            classifiable_ids=classifiable_ids,
             instructions=instructions,
             output_dir=output_dir,
             generator=generator,
@@ -139,7 +142,8 @@ def process_all_taxonomies(
 def process_single_taxonomy(
     tax_name: str,
     taxonomy: dict,
-    data: pd.DataFrame,
+    full_corpus: pd.DataFrame,
+    classifiable_ids: pd.Series,
     instructions: str,
     output_dir: Path,
     generator,
@@ -151,7 +155,8 @@ def process_single_taxonomy(
             tax_name=tax_name,
             tactic_name=tactic_name,
             tactic=tactic,
-            data=data,
+            full_corpus=full_corpus,
+            classifiable_ids=classifiable_ids,
             instructions=instructions,
             output_dir=output_dir,
             generator=generator,
@@ -162,35 +167,41 @@ def process_tactic(
     tax_name: str,
     tactic_name: str,
     tactic: dict,
-    data: pd.DataFrame,
+    full_corpus: pd.DataFrame,
+    classifiable_ids: pd.Series,
     instructions: str,
     output_dir: Path,
     generator,
 ) -> None:
-    description = tactic.get("description", "")
-    examples = tactic.get("examples", [])
-    lookup = build_comment_lookup(data)
-    results = []
+    description = tactic.get("description")
+    examples = tactic.get("examples")
 
+    # Build lookup from full corpus so context chain is intact
+    # TODO: delete
+    lookup = build_comment_lookup(full_corpus.head(20000))
+
+    # Filter the rows of full_corpus to only those we should classify
+    to_classify = full_corpus[
+        full_corpus["message_id"].astype(str).isin(set(classifiable_ids))
+    ]
+
+    results = []
     for _, row in tqdm(
-        data.iterrows(),
-        total=len(data),
+        to_classify.iterrows(),
+        total=len(to_classify),
         leave=False,
         desc=f"Tactic: {tactic_name}",
     ):
         message_id = row.get("message_id")
-        # Build classifiable comment with its context chain as Comment objects
         context_comments = fetch_context_chain_comments(
             row.to_dict(), lookup, MAX_COMMENT_CTX
         )
-        # The user field key might differ; adjust if necessary (e.g., 'user_id' or 'author')
         user = row.get("user", "unknown")
         comment_text = row.get("text")
         classifiable = ClassifiableComment(
             comment=comment_text, user=user, context=context_comments
         )
 
-        # Use its string representation as the {{input}} for the template
         input_str = str(classifiable)
         prompt = create_prompt_from_input(
             instructions=instructions,
@@ -199,6 +210,7 @@ def process_tactic(
             examples=examples,
             input_str=input_str,
         )
+        # TODO: delete
         print(prompt)
 
         is_match = comment_is_tactic(prompt=prompt, generator=generator)
@@ -261,9 +273,9 @@ def main(args):
     instructions: str = load_instructions(Path(args.prompt_file))
     output_dir = Path(args.output_dir)
 
-    data = util.io.progress_load_csv(args.dataset_file)
-    df = process_data(
-        data,
+    full_corpus = util.io.progress_load_csv(args.dataset_file)
+    classifiable_ids = process_data(
+        full_corpus,
         mod_threshold=args.mod_probability_thres,
         mod_probability_file=Path(args.mod_probability_file),
     )
@@ -278,7 +290,12 @@ def main(args):
     )
 
     process_all_taxonomies(
-        taxonomy_dict, df, instructions, output_dir, generator=generator
+        taxonomy_dict,
+        full_corpus=full_corpus,
+        classifiable_ids=classifiable_ids,
+        instructions=instructions,
+        output_dir=output_dir,
+        generator=generator,
     )
 
 
