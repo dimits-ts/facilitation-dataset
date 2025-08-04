@@ -1,21 +1,27 @@
 import argparse
-from pathlib import Path
+import logging
+import logging.handlers
 import yaml
+import sys
+from pathlib import Path
 
 import transformers
 import pandas as pd
+import coloredlogs
 from tqdm.auto import tqdm
 
 import util.io
 
+
 MODEL_NAME = "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"  # placeholder
 MAX_COMMENT_CTX = 2  # number of parent comments to include in context
+logger = logging.getLogger(Path(__file__).name)
 
 
 class Comment:
     def __init__(self, comment: str, user: str, max_len_chars: int = 2000):
         self.user = user
-        if len(self.comment) > max_len_chars:
+        if len(comment) > max_len_chars:
             self.comment = comment[:max_len_chars] + "[...]"
         else:
             self.comment = comment
@@ -33,6 +39,40 @@ class ClassifiableComment(Comment):
         ctx_strs = [f"{c.user}: {c.comment}" for c in self.context]
         context = f"Preceding comments: {ctx_strs}"
         return f"{context}\nComment to be classified:\n{super().__str__()}"
+
+
+def setup_logging(logs_dir: Path):
+    logs_dir.mkdir(parents=True, exist_ok=True)
+    logfile_path = logs_dir / "taxonomies"
+    file_handler = logging.handlers.TimedRotatingFileHandler(
+        filename=str(logfile_path),
+        when="midnight",
+        interval=1,
+        backupCount=7,
+        encoding="utf-8",
+        utc=True,
+    )
+    file_handler.suffix = "%Y-%m-%d.log"  # date + .log extension
+
+    formatter = logging.Formatter(
+        fmt="%(asctime)s %(levelname)-8s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    file_handler.setFormatter(formatter)
+    stream_handler = logging.StreamHandler()
+    stream_handler.setFormatter(formatter)
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+    root_logger.handlers.clear()
+    root_logger.addHandler(stream_handler)
+    root_logger.addHandler(file_handler)
+
+    # make coloredlogs apply only to console output
+    coloredlogs.install(
+        level="INFO", logger=root_logger, stream=stream_handler.stream
+    )
+
+    logging.captureWarnings(True)
 
 
 def create_prompt_from_input(
@@ -155,6 +195,7 @@ def process_single_taxonomy(
     for tactic_name, tactic in tqdm(
         taxonomy.items(), desc=f"Taxonomy: {tax_name}"
     ):
+        logger.info("Processing taxonomy " + tax_name)
         process_tactic(
             tax_name=tax_name,
             tactic_name=tactic_name,
@@ -177,6 +218,8 @@ def process_tactic(
     output_dir: Path,
     generator,
 ) -> None:
+    logger.info("Processing tactic " + tactic_name)
+    logger.info("Building data")
     description = tactic.get("description")
     examples = tactic.get("examples")
 
@@ -189,6 +232,7 @@ def process_tactic(
         full_corpus["message_id"].astype(str).isin(set(classifiable_ids))
     ]
 
+    logger.info("Starting inference")
     results = []
     for _, row in tqdm(
         to_classify.iterrows(),
@@ -214,14 +258,13 @@ def process_tactic(
             examples=examples,
             input_str=input_str,
         )
-        # TODO: delete
-        print(prompt)
 
         is_match = comment_is_tactic(prompt=prompt, generator=generator)
         results.append({"message_id": message_id, "is_match": is_match})
 
     output_dir.mkdir(parents=True, exist_ok=True)
     out_file = output_dir / f"{tax_name.strip()}.{tactic_name.strip()}.csv"
+    logger.info("Saving results to file " + str(out_file))
     pd.DataFrame(results, columns=["message_id", "is_match"]).to_csv(
         out_file, index=False
     )
@@ -236,14 +279,13 @@ def comment_is_tactic(prompt: str, generator) -> bool:
         output = generator(
             prompt,
             max_new_tokens=10,
-            do_sample=False,  # deterministic
         )
         # pipeline returns list with generated_text
         res = output[0]["generated_text"][len(prompt) :].strip().lower()
         res = parse_response(res)
         return res
-    except Exception as e:
-        print("Exception occurred during inference: ", e)
+    except Exception:
+        logger.exception("")
         return False
 
 
@@ -268,7 +310,7 @@ def parse_response(res: str) -> bool:
     if res.startswith("n"):
         return False
 
-    print("Non-standard answer detected: {res}")
+    logger.error("Non-standard answer detected: {res}")
     return False
 
 
@@ -276,6 +318,9 @@ def main(args):
     taxonomy_dict: dict = load_yaml(Path(args.taxonomy_file))
     instructions: str = load_instructions(Path(args.prompt_file))
     output_dir = Path(args.output_dir)
+    logs_dir = Path(args.logs_dir)
+
+    setup_logging(logs_dir=logs_dir)
 
     full_corpus = util.io.progress_load_csv(args.dataset_file)
     classifiable_ids = process_data(
@@ -293,31 +338,24 @@ def main(args):
         model=model, tokenizer=tokenizer
     )
 
-    process_all_taxonomies(
-        taxonomy_dict,
-        full_corpus=full_corpus,
-        classifiable_ids=classifiable_ids,
-        instructions=instructions,
-        output_dir=output_dir,
-        generator=generator,
-    )
+    try:
+        process_all_taxonomies(
+            taxonomy_dict,
+            full_corpus=full_corpus,
+            classifiable_ids=classifiable_ids,
+            instructions=instructions,
+            output_dir=output_dir,
+            generator=generator,
+        )
+    except:
+        logger.critical("Critical error encountered. Exiting...")
+        logger.exception("")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Classify forum comments using taxonomy categories and an LLM."
-    )
-    parser.add_argument(
-        "--mod_probability_thres",
-        required=False,
-        type=float,
-        default=0.5,
-        help="Probability threshold for a comment to be classified as moderated",
-    )
-    parser.add_argument(
-        "--mod_probability_file",
-        required=True,
-        help="Path to the mod probability CSV file (must contain message_id and mod_probability).",
     )
     parser.add_argument(
         "--dataset_file",
@@ -338,6 +376,23 @@ if __name__ == "__main__":
         "--output_dir",
         required=True,
         help="Dir to save the output CSV files.",
+    )
+    parser.add_argument(
+        "--logs_dir",
+        required=True,
+        help="Dir to save execution logs.",
+    )
+    parser.add_argument(
+        "--mod_probability_file",
+        required=True,
+        help="Path to the mod probability CSV file (must contain message_id and mod_probability).",
+    )
+    parser.add_argument(
+        "--mod_probability_thres",
+        required=False,
+        type=float,
+        default=0.5,
+        help="Probability threshold for a comment to be classified as moderated",
     )
     args = parser.parse_args()
     main(args)
