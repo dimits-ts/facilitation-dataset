@@ -13,10 +13,12 @@ MAX_COMMENT_CTX = 2  # number of parent comments to include in context
 
 
 class Comment:
-    def __init__(self, comment: str, user: str):
+    def __init__(self, comment: str, user: str, max_len_chars: int = 2000):
         self.user = user
-        self.comment = comment
-        self.context = []
+        if len(self.comment) > max_len_chars:
+            self.comment = comment[:max_len_chars] + "[...]"
+        else:
+            self.comment = comment
 
     def __str__(self):
         return f"Comment by {self.user}: ``{self.comment}''"
@@ -56,7 +58,9 @@ def create_prompt_from_input(
 
 def build_comment_lookup(df: pd.DataFrame) -> dict:
     lookup = {}
-    for _, row in tqdm(df.iterrows(), total=len(df), desc="Processing comments", leave=False):
+    for _, row in tqdm(
+        df.iterrows(), total=len(df), desc="Processing comments", leave=False
+    ):
         msg_id = row.get("message_id")
         if pd.isna(msg_id):
             continue
