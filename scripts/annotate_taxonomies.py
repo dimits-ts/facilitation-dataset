@@ -47,33 +47,43 @@ class ClassifiableComment(Comment):
 
 def setup_logging(logs_dir: Path):
     logs_dir.mkdir(parents=True, exist_ok=True)
-    logfile_path = logs_dir / "taxonomies"
+    logfile_path = logs_dir / "taxonomies.log"  # include .log extension
+
+    # Rolling over at local midnight; keep last 7 days
     file_handler = logging.handlers.TimedRotatingFileHandler(
         filename=str(logfile_path),
         when="midnight",
         interval=1,
-        backupCount=7,
+        backupCount=30,
         encoding="utf-8",
-        utc=True,
+        utc=False,  # use local time for rollover; switch to True only if you want UTC-based dates
     )
-    file_handler.suffix = "%Y-%m-%d.log"  # date + .log extension
+    file_handler.suffix = "%Y-%m-%d"
+    file_handler.setFormatter(
+        logging.Formatter(
+            fmt="%(asctime)s %(levelname)-8s %(message)s",
+            datefmt="%Y-%m-%d %H:%M:%S",
+        )
+    )
 
-    formatter = logging.Formatter(
+    # Console handler
+    stream_handler = logging.StreamHandler()
+    stream_formatter = logging.Formatter(
         fmt="%(asctime)s %(levelname)-8s %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    file_handler.setFormatter(formatter)
-    stream_handler = logging.StreamHandler()
-    stream_handler.setFormatter(formatter)
+    stream_handler.setFormatter(stream_formatter)
+
+    # Root logger configuration
     root_logger = logging.getLogger()
     root_logger.setLevel(logging.INFO)
     root_logger.handlers.clear()
     root_logger.addHandler(stream_handler)
     root_logger.addHandler(file_handler)
 
-    # make coloredlogs apply only to console output
+    # Apply coloredlogs only to console output
     coloredlogs.install(
-        level="INFO", logger=root_logger, stream=stream_handler.stream
+        level="INFO", logger=root_logger, fmt="%(asctime)s %(levelname)-8s %(message)s", stream=stream_handler.stream
     )
 
     logging.captureWarnings(True)
@@ -125,14 +135,14 @@ def fetch_context_chain_comments(
         parent = lookup.get(parent_id)
         if not parent:
             break
-        # wrap parent as a Comment
         parent_comment = Comment(
             comment=parent.get("text"), user=parent.get("user", "")
         )
         context.append(parent_comment)
         current = parent
         depth += 1
-    return context.reverse()
+    # return in chronological order (oldest first)
+    return list(reversed(context))
 
 
 def select_mod_ids(
@@ -235,6 +245,7 @@ def process_tactic(
     output_dir: Path,
     generator,
 ) -> None:
+    first_print = True
     logger.info("Processing tactic " + tactic_name)
     logger.info("Building data")
     description = tactic.get("description")
@@ -274,6 +285,9 @@ def process_tactic(
             examples=examples,
             input_str=input_str,
         )
+        if first_print:
+            logger.info("Prompt used: " + prompt)
+            first_print=False
 
         is_match = comment_is_tactic(prompt=prompt, generator=generator)
         results.append({"message_id": message_id, "is_match": is_match})
