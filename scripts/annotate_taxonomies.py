@@ -17,7 +17,6 @@ import util.classification
 MODEL_NAME = "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"
 MAX_COMMENT_CTX = 2
 NUM_COMMENT_SAMPLE = 16_000
-MIN_CHARACTERS = 10
 
 logger = logging.getLogger(__name__)
 
@@ -169,19 +168,24 @@ def select_mod_ids(
 
     # Inferred moderator comments: non-moderators whose message_id is in high_conf_ids
     inferred_mod_comments = full_corpus[
-        (~full_corpus.moderation_supported)
-        & (full_corpus.message_id.isin(high_conf_ids))
+        full_corpus.message_id.isin(high_conf_ids)
     ]
 
     selected = pd.concat(
         [mod_comments, inferred_mod_comments], ignore_index=True
+    ).drop_duplicates()
+    categories = full_corpus["dataset"].unique()
+    n_per_cat = NUM_COMMENT_SAMPLE // len(categories)  # floor division
+
+    sampled = (
+        selected.groupby("dataset")
+        .apply(lambda g: g.sample(n=min(len(g), n_per_cat), random_state=42))
+        .reset_index(drop=True)
     )
-    selected = selected[selected.text.str.len() > MIN_CHARACTERS]
-    print(selected.dataset.value_counts())
-    stratified_sample = selected.groupby("dataset").sample(
-        n=NUM_COMMENT_SAMPLE, random_state=42
+    logger.info(
+        "Selected sample sizes:\n" + str(sampled.dataset.value_counts())
     )
-    return stratified_sample["message_id"].dropna().astype(str)
+    return sampled["message_id"].dropna().astype(str)
 
 
 def process_all_taxonomies(
@@ -324,6 +328,7 @@ def load_instructions(path: Path) -> str:
 
 
 def parse_response(res: str) -> bool:
+    res = res.replace("```", "")  # common llama bug
     if res.startswith("yes"):
         return True
     if res.startswith("no"):
@@ -356,8 +361,10 @@ def main(args):
             "wikidisputes": "wikipedia",
         }
     )
-    print(full_corpus.dataset.unique())
-    print(full_corpus.dataset.value_counts())
+    logger.info(
+        "Full dataset distribution:\n"
+        + str(full_corpus.dataset.value_counts())
+    )
 
     classifiable_ids = select_mod_ids(
         full_corpus,
