@@ -13,7 +13,7 @@ import util.io
 DATASET_PATH = Path("pefk.csv")
 OUTPUT_DIR = Path("discqua")
 METRICS = [
-    DiscQuA.calculate_structure_features,
+    DiscQuA.calculate_structure_features,  # too much output
     DiscQuA.calculate_balanced_participation,
     DiscQuA.calculate_language_features,
     DiscQuA.calculate_coordination_per_disc_utt,
@@ -45,12 +45,12 @@ def calculate_metric(
 
     all_args = {
         "message_list": get_message_list(conv),
-        "message_id_list": get_message_id_list(conv),
+        "msgsid_list": get_message_id_list(conv),
         "speakers_list": get_speakers_list(conv),
         "replyto_list": get_reply_to_list(conv),
         "disc_id": conv_id,
         "discussion_level": False,
-        "ctx": 3
+        "ctx": 3,
     }
 
     # Provide only accepted parameters, since only a subset is used each time
@@ -60,16 +60,19 @@ def calculate_metric(
 
 
 def main():
-    nltk.download("punk_tab")
+    nltk.download("punkt_tab")
     nltk.download("stopwords")
 
-    df = util.io.progress_load_csv(DATASET_PATH)
+    # df = util.io.progress_load_csv(DATASET_PATH)
+    df = pd.read_csv(DATASET_PATH, nrows=10000)
+    df = df.astype(str)
     results = []
-    for metric in tqdm(METRICS):
-        for conv_id in tqdm(df.conv_id.unique()):
+    for metric in tqdm(METRICS, desc="Metrics"):
+        for conv_id in tqdm(
+            df.conv_id.unique(), desc="Discussions", leave=False
+        ):
             result = calculate_metric(df, conv_id, metric)
-            results.append((metric, conv_id, result))
-            print(result)
+            results.append((metric.__name__, conv_id, result))
 
 
 if __name__ == "__main__":
