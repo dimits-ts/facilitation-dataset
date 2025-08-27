@@ -1,9 +1,10 @@
 from pathlib import Path
 import typing
+import inspect
 
 import pandas as pd
 import nltk
-import DiscQua
+import DiscQuA
 from tqdm.auto import tqdm
 
 import util.io
@@ -12,13 +13,12 @@ import util.io
 DATASET_PATH = Path("pefk.csv")
 OUTPUT_DIR = Path("discqua")
 METRICS = [
-    DiscQua.structure_features,
-    DiscQua.balanced_participation,
-    DiscQua.language_features,
-    DiscQua.coordination_per_disc_utt,
-    DiscQua.politeness,
-    DiscQua.readability,
-    DiscQua.collaboration,
+    DiscQuA.calculate_structure_features,
+    DiscQuA.calculate_balanced_participation,
+    DiscQuA.calculate_language_features,
+    DiscQuA.calculate_coordination_per_disc_utt,
+    DiscQuA.calculate_politeness,
+    DiscQuA.calculate_readability,
 ]
 
 
@@ -43,14 +43,20 @@ def calculate_metric(
 ) -> float:
     conv = df[df.conv_id == conv_id]
 
-    return metric(
-        message_list=get_message_list(conv),
-        message_id_list=get_message_id_list(conv),
-        speakers_list=get_speakers_list(conv),
-        replyto_list=get_reply_to_list(conv),
-        disc_id=conv_id,
-        discussion_level=False,
-    )
+    all_args = {
+        "message_list": get_message_list(conv),
+        "message_id_list": get_message_id_list(conv),
+        "speakers_list": get_speakers_list(conv),
+        "replyto_list": get_reply_to_list(conv),
+        "disc_id": conv_id,
+        "discussion_level": False,
+        "ctx": 3
+    }
+
+    # Provide only accepted parameters, since only a subset is used each time
+    sig = inspect.signature(metric)
+    accepted_args = {k: v for k, v in all_args.items() if k in sig.parameters}
+    return metric(**accepted_args)
 
 
 def main():
