@@ -1,0 +1,263 @@
+whow:
+  Informational Motive:
+    description: >
+      Provide or acquire relevant information to constructively advance the topic
+      or goal of the conversation.
+    examples:
+      - "Why do you think minimum wage is unfair?"
+      - "The legal system has many loopholes."
+      - "Yea! I agree with your point!"
+      - "The law was established in 1998."
+
+  Social Motive:
+    description: >
+      Enhance the social atmosphere and connections among participants by addressing
+      feelings, emotions, and interpersonal dynamics within the group.
+    examples:
+      - "It is sad to hear the news of the tragedy."
+      - "Thank you! Mr. Wang."
+      - "Hello! Let’s welcome Dr. Frankton."
+      - "I can understand your struggle being a single mum."
+      - "Please feel free to say your mind because I can’t bite you online, hehe!"
+      - "The definition is short and simple! I love it!"
+      - "Maybe Amy’s intention is different to what you thought, you guys actually believe the same thing."
+
+  Coordinative Motive:
+    description: >
+      Ensure adherence to rules, plans, and broader contextual constraints,
+      such as time and environment.
+    examples:
+      - "Let’s move on to the next question due to time running out."
+      - "We going to start with the blue team and then the red team"
+      - "Do you want to go first?"
+      - "Please move to the left side and turn on your mic!"
+
+  Mixed Motive:
+    description: >
+      Utterances that express more than one motive simultaneously.
+    examples:
+      - "I am very sorry about the incident, but few exceptions cannot defy the statistic majority."
+      - "My daughter dies because of a broken traffic light."
+      - "Sorry, John, I spoke over you, go ahead?"
+      - "Okay—thank you, we—those are good, those are all questions and they’re quite good and brief."
+
+  Probing:
+    description: >
+      Prompt the speaker for a response (excluding rhetorical questions).
+    examples:
+      - "What is your view on that Dr. Foster?"
+      - "Where are you from?"
+      - "Peter!"
+      - "If the majority of people are voting against it, would you still insist?"
+      - "Do you agree with this statement?"
+
+  Confronting:
+    description: >
+      Prompt one speaker to respond or engage with another.
+    examples:
+      - "So David pointed out the critical weakness of the system, what is your thought on his critiques, Dr. Foster?"
+
+  Supplement:
+    description: >
+      Provide information to enrich the conversation without controlling flow.
+    examples:
+      - "Supposed we live in a world where such behaviour is accepted."
+      - "I suggest the best solution is giving everyone equal chances."
+      - "The government announced tax raise from March."
+      - "I agree with that you said."
+      - "GM means genetic modified."
+      - "I think people should be given the right to say no!"
+
+  Interpretation:
+    description: >
+      Clarify, reframe, summarize, quote, or paraphrase earlier content.
+    examples:
+      - "So basically, what Amy said is that they didn’t use the budget efficiently."
+      - "You said ‘I believe GM is harmless,’."
+      - "In another word, you don’t like their plan."
+      - "My understanding is you don’t support this due to moral reason."
+      - "She does not mean to hurt you but just tell the truth."
+      - "So far, we have Dr. Johnson suggesting…., and Dr. Brown against it because……"
+      - "Amy saying that to justify the reduction of the wage, but not aiming to induce suffering."
+
+  Instruction:
+    description: >
+      Influence, halt, or command behaviour explicitly.
+    examples:
+      - "Please get back to the topic."
+      - "Please stop here, we are running out of time."
+      - "The red will start now."
+      - "Please mind your choice of words and manner."
+      - "Do not intentionally create misconception."
+      - "Now is not your term, stop here."
+
+  Utility:
+    description: >
+      Miscellaneous acts not involving information transfer or request but still
+      relevant for engagement or turn-taking.
+    examples:
+      - "Thanks, you."
+      - "Sorry."
+      - "Okay."
+      - "Um hm."
+      - "But, but, but……"
+
+lim_et_al_2021:
+  Invite Feedback or Comments:
+    description: >
+      Encourage participants to post online by inviting feedback and comments.
+    examples:
+      - "Please feel free to give me lots of comments and feedback to enhance it."
+
+  Expressing Agreements:
+    description: >
+      Express agreement to valid points made by other participants.
+    examples:
+      - "You are right! When I designed that main menu slide, my idea was to accentuate the color wheel."
+
+  Acknowledgement or Showing Appreciation:
+    description: >
+      Offer words of appreciation or acknowledgment of others' contributions.
+    examples:
+      - "Thank you for the suggestion."
+
+  Challenge Others’ Viewpoints:
+    description: >
+      Pose a challenge to a participant or participants' views or ideas.
+    examples:
+      - "We shall do an experiment on this and test it out to see who’s right!"
+
+  Questioning:
+    description: >
+      Ask questions to clarify or elaborate on contributions; probe viewpoints or opinions.
+    examples:
+      - "Why do you say that? Do you have the same problem too?"
+      - "How do you find the level of interactivity?"
+      - "What do you think of the color used for the tabs?"
+
+  Summarize Salient Points:
+    description: >
+      Provide a short summary of key discussion points.
+    examples:
+      - "I have consolidated and summarized my learning points from this afternoon session."
+
+  Make Connections with Supporting Research:
+    description: >
+      Reference existing literature or resources to support discussion.
+    examples:
+      - "I did a little research on colors and found some really useful info on the net: (URL provided)."
+
+  Providing Opinions or Explanation:
+    description: >
+      Offer one's own opinion or explanation, describing rationale or reasoning.
+    examples:
+      - "Personally, I found the article more suited for colors for classroom environment instead because..."
+
+  Establish New Threads or Directions:
+    description: >
+      Direct participants toward new discussion threads or alternative directions in thinking.
+    examples:
+      - "I have started the following thread. It is open for debate and discussion."
+  
+
+park_et_al_2012:
+  Welcoming:
+      description: >
+        Social function involving encouragement, appreciation of contributions, and welcoming tone.
+      examples:
+        - "Thank you for participating!"
+        - "We appreciate your comment."
+        - "Welcome to the discussion—glad to have you here."
+
+  Resolving Site Use Issues:
+    description: >
+      Address technical difficulties and provide clarity on the goals, rules, or structure of the platform or moderation.
+    examples:
+      - "If you're having trouble logging in, try resetting your password."
+      - "This forum is moderated by CeRI to ensure thoughtful engagement."
+      - "Please remember, the aim here is to gather feedback on the proposed rule."
+
+  Organizing Discussion:
+    description: >
+      Direct users to issue posts or threads more aligned with their expressed interest or comment topic.
+    examples:
+      - "It sounds like your concern is more relevant to [Topic X]—please consider posting it there."
+
+  Policing:
+    description: >
+      Intervene to maintain civility and enforce community standards, including moderating inappropriate content.
+    examples:
+      - "This comment has been redacted due to inappropriate language."
+      - "Please maintain respectful discourse in this space."
+
+  Keeping Discussion on Target:
+    description: >
+      Refocus the discussion by identifying off-topic comments or explaining relevance to agency scope.
+    examples:
+      - "This issue falls outside the agency's current rulemaking authority."
+      - "This comment is not related to the topic under discussion."
+
+  Improving Comment Quality:
+    description: >
+      Help users strengthen their contributions by providing context, correcting misstatements, and encouraging evidence-based input.
+    examples:
+      - "The rule applies only to urban zones, not rural areas."
+      - "Please provide supporting data or examples for your claim."
+      - "Consider suggesting a possible alternative or solution."
+
+  Broadening Discussion:
+    description: >
+      Expand user perspectives by promoting engagement with others and encouraging community-wide dialogue.
+    examples:
+      - "What do others think about this proposal?"
+      - "You might consider responding to Jane's point above—she raises a similar concern."
+
+fora:
+  Expressing Appreciation:
+    description: >
+      Show gratitude for a participant’s contribution or presence in the discussion.
+    examples:
+      - "Thanks for sharing that."
+      - "Alright, great, now do I have everyone? Appreciated. Sure. Let’s move on."
+
+  Expressing Agreement:
+    description: >
+      Indicate alignment with a participant’s statement or perspective.
+    examples:
+      - "Definitely. I hear you."
+      - "I agree. I keep hearing that in these conversations."
+
+  Open Invitation to Participate:
+    description: >
+      Invite any participant to contribute without addressing a specific individual.
+    examples:
+      - "Alright with that being said, does anyone want to kick us off?"
+      - "Ok great. Now anyone who wants to go next can unmute."
+
+  Specific Invitation to Participate:
+    description: >
+      Invite a specific participant to speak, often by name or acknowledgement of a gesture.
+    examples:
+      - "Kelly? Did you want to go next?"
+      - "Oh, Joe? I see you’re raising your hand. Are you ready to go?"
+
+  Modeling Example Response:
+    description: >
+      Demonstrate an example answer to guide participants in responding to a question or prompt.
+    examples:
+      - "So first we are going to give introductions and then share a value that’s important to us. I’ll kick us off. I’m Kelly and a value that’s important to me is courage."
+      - "Some people are confused in this stage so I’ll give you an example. My grandmother lived next door to us when I was growing up..."
+
+  Follow-Up Question:
+    description: >
+      Ask an additional question to a participant to deepen or clarify their contribution.
+    examples:
+      - "Wow, Kelly, that’s such a touching story. Did you ever find out who sent the package?"
+
+  Making Connections:
+    description: >
+      Link one participant’s comment or story to another participant’s contribution or a prior discussion topic.
+    examples:
+      - "That’s similar to what Jamie shared earlier, right?"
+      - "I have a similar experience that resonates."
+      - "That connects to what we were discussing earlier."

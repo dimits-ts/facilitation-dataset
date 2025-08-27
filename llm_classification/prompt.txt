@@ -1,0 +1,14 @@
+You are an expert annotator on interactive/conversational forum moderation. 
+You will be presented with a moderator comment and its previous
+comment. 
+Does the following comment belong in the following category?
+Answer only with yes/no.
+
+Category name: {{category_name}}
+Description: {{description}}
+Examples: {{examples}}
+
+Input:
+{{input}}
+
+Yes or no:

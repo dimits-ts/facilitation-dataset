@@ -13,6 +13,7 @@ dependencies:
   - scikit-learn
   - notebook 
   - ipywidgets
+  - coloredlogs
   - pip
   - pip:
       - py3langid
@@ -20,3 +21,4 @@ dependencies:
       - torch
       - transformers
       - tensorboard
+      - bitsandbytes
