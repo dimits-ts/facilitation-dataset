@@ -29,13 +29,16 @@ def progress_load_csv(
                 desc="Loading dataset",
                 total=get_num_chunks(csv_path, chunksize),
                 bar_format="{l_bar}{bar} {percentage:.0f}%",
-                leave=False
+                leave=False,
             )
         ]
     )
 
 
 def get_num_chunks(file_path: Path, chunk_size: int) -> int:
+    # Is fooled by newlines inside the data, overstimates dataset size
+    # However is the only way to obtain an estimate without reading the whole
+    # file, which would defeat the point.
     result = subprocess.run(
         ["wc", "-l", str(file_path)], capture_output=True, text=True
     )
