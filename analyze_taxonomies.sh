@@ -1,6 +1,4 @@
 #!/bin/bash
-bash create_augmented_dataset.sh
-
 LOG_FILE="logs/pefk_taxonomies.log"
 
 python scripts/annotate_taxonomies.py --mod_probability_file=output_datasets/pefk_mod.csv --dataset_file=pefk.csv --taxonomy_file=llm_classification/ta
