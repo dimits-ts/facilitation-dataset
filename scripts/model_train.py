@@ -1,6 +1,5 @@
 from pathlib import Path
 import argparse
-import random
 
 import pandas as pd
 import torch
@@ -22,166 +21,6 @@ FINETUNE_ONLY_HEAD = True
 TEST_METRICS = {"loss", "accuracy", "f1"}
 CTX_LENGTH_COMMENTS = 4
 MODEL = "answerdotai/ModernBERT-base"
-
-
-class WeightedLossTrainer(transformers.Trainer):
-    def __init__(self, pos_weight, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.pos_weight = torch.tensor([pos_weight])
-
-    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
-        labels = inputs.get("labels").float()
-        outputs = model(**inputs)
-        logits = outputs.get("logits").view(-1)
-        labels = labels.view(-1)
-        loss_fct = torch.nn.BCEWithLogitsLoss(
-            pos_weight=self.pos_weight.to(logits.device)
-        )
-        loss = loss_fct(logits, labels)
-
-        return (loss, outputs) if return_outputs else loss
-
-
-class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
-    """
-    Yields lists of indices such that items inside a batch have similar
-    sequence length.  That keeps padding - and thus compute - to a minimum.
-
-    • Batches are *shuffled* every epoch, but order inside each batch
-      is irrelevant (Trainer will not re-shuffle).
-    • Works for any dataset that yields a dict with 'input_ids'.
-    """
-
-    def __init__(self, dataset, batch_size, drop_last: bool = False):
-        self.dataset = dataset
-        self.batch_size = batch_size
-        self.drop_last = drop_last
-
-        # just ask the dataset
-        self.lengths = [dataset.length(i) for i in range(len(dataset))]
-        self.sorted_indices = sorted(
-            range(len(dataset)), key=self.lengths.__getitem__
-        )
-
-    def __iter__(self):
-        # -- bucketed indices, then shuffle buckets --
-        batches = [
-            self.sorted_indices[i : i + self.batch_size]
-            for i in range(0, len(self.sorted_indices), self.batch_size)
-        ]
-        if self.drop_last and len(batches[-1]) < self.batch_size:
-            batches = batches[:-1]
-
-        random.shuffle(batches)  # different order every epoch
-        for b in batches:
-            yield b
-
-    def __len__(self):
-        full, rest = divmod(len(self.sorted_indices), self.batch_size)
-        return full if (rest == 0 or self.drop_last) else full + 1
-
-
-class BucketedTrainer(WeightedLossTrainer):
-    """
-    Overrides get_train_dataloader() and get_eval_dataloader()
-    so Trainer uses our bucketed sampler for train and default sampler
-    + collate_fn for eval.
-    """
-
-    def __init__(self, bucket_batch_size, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.bucket_batch_size = bucket_batch_size
-
-    def get_train_dataloader(self) -> torch.utils.data.DataLoader:
-        if self.train_dataset is None:
-            raise ValueError("Trainer: training dataset must be provided")
-
-        sampler = SmartBucketBatchSampler(
-            self.train_dataset,
-            batch_size=self.bucket_batch_size,
-            drop_last=False,
-        )
-        return torch.utils.data.DataLoader(
-            self.train_dataset,
-            batch_sampler=sampler,
-            collate_fn=self.data_collator,
-            num_workers=4,
-            pin_memory=torch.cuda.is_available(),
-        )
-
-    def get_eval_dataloader(
-        self, eval_dataset=None
-    ) -> torch.utils.data.DataLoader:
-        eval_dataset = (
-            eval_dataset if eval_dataset is not None else self.eval_dataset
-        )
-        if eval_dataset is None:
-            raise ValueError("Trainer: evaluation dataset must be provided")
-
-        # Use default sequential sampler for eval + your collate_fn
-        return torch.utils.data.DataLoader(
-            eval_dataset,
-            batch_size=self.bucket_batch_size,
-            shuffle=False,
-            collate_fn=self.data_collator,
-            num_workers=4,
-            pin_memory=torch.cuda.is_available(),
-        )
-
-
-class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
-    def __init__(
-        self,
-        warmup_steps=500,
-        patience=3,
-        threshold=0.0,
-        metric_name="eval_loss",
-        greater_is_better=False,
-    ):
-        self.warmup_steps = warmup_steps
-        self.patience = patience
-        self.threshold = threshold
-        self.metric_name = metric_name
-        self.greater_is_better = greater_is_better
-        self.best_metric = None
-        self.wait_count = 0
-
-    def on_evaluate(
-        self,
-        args,
-        state: transformers.TrainerState,
-        control: transformers.TrainerControl,
-        metrics,
-        **kwargs,
-    ):
-        current_step = state.global_step
-
-        if current_step < self.warmup_steps:
-            return control  # still warming up
-
-        metric_value = metrics.get(self.metric_name)
-        if metric_value is None:
-            return control  # metric not available yet
-
-        if self.best_metric is None:
-            self.best_metric = metric_value
-            return control
-
-        operator = (
-            (lambda a, b: a > b + self.threshold)
-            if self.greater_is_better
-            else (lambda a, b: a < b - self.threshold)
-        )
-
-        if operator(metric_value, self.best_metric):
-            self.best_metric = metric_value
-            self.wait_count = 0
-        else:
-            self.wait_count += 1
-            if self.wait_count >= self.patience:
-                control.should_training_stop = True
-
-        return control
 
 
 def train_model(
@@ -227,14 +66,14 @@ def train_model(
         report_to="tensorboard",
     )
 
-    early_stopping = EarlyStoppingWithWarmupStepsCallback(
+    early_stopping = util.classification.EarlyStoppingWithWarmupStepsCallback(
         warmup_steps=EARLY_STOP_WARMUP,
         patience=EARLY_STOP_PATIENCE,
         metric_name="eval_loss",
         greater_is_better=False,
     )
 
-    trainer = BucketedTrainer(
+    trainer = util.classification.BucketedTrainer(
         bucket_batch_size=BATCH_SIZE,
         pos_weight=pos_weight,
         model=model,
@@ -313,7 +152,7 @@ def test_model(
     eval_dict = {name: make_ds(df) for name, df in test_df.groupby("dataset")}
     full_ds = make_ds(test_df)
 
-    trainer = BucketedTrainer(
+    trainer = util.classification.BucketedTrainer(
         bucket_batch_size=BATCH_SIZE,
         pos_weight=1.0,  # not used in eval mode
         model=model,
