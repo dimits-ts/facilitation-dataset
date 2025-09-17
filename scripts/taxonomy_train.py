@@ -10,6 +10,7 @@ from tqdm.auto import tqdm
 import util.classification
 import util.io
 
+
 EVAL_STEPS = 4000
 EPOCHS = 120
 MAX_LENGTH = 8192
@@ -25,7 +26,7 @@ CTX_LENGTH_COMMENTS = 4
 def load_labels(base_df: pd.DataFrame, labels_dir: Path) -> pd.DataFrame:
     df = base_df.copy()
     for label_file in tqdm(
-        list(labels_dir.glob("*.csv"))[:2], desc="Loading labels"
+        list(labels_dir.glob("*.csv")), desc="Loading labels"
     ):
         label_name = label_file.stem
         label_df = pd.read_csv(label_file)
@@ -190,8 +191,9 @@ def main(args):
     tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
 
     # adapt dataset class to support multi-label
-    print("Creating training datasets...")
+    print("Creating train dataset...")
     train_ds = make_dataset(train_df)
+    print("Creating validation dataset...")
     val_ds = make_dataset(val_df)
 
     if not args.only_test:

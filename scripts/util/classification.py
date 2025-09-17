@@ -27,12 +27,13 @@ class DiscussionDataset(torch.utils.data.Dataset):
         df: pd.DataFrame,
         tokenizer: transformers.PreTrainedTokenizerBase,
         max_length: int,
-        label_column: str,
+        label_column: str | list[str],
         max_context_turns: int = 4,
     ):
         self.df = df.reset_index(drop=True)
         self.tokenizer = tokenizer
         self.max_length = max_length
+        # Accept either a single label name or a list of label names
         self.label_column = label_column
         self.max_context_turns = max_context_turns
 
@@ -40,8 +41,29 @@ class DiscussionDataset(torch.utils.data.Dataset):
         self._texts = self.df["text"].tolist()
         self._reply_to = self.df["reply_to"].tolist()
         self._message_ids = self.df["message_id"].tolist()
-        self._labels = self.df[self.label_column].astype(float).tolist()
 
+        # Handle multi-label or single-label
+        if isinstance(self.label_column, (list, tuple)):
+            missing = [
+                c for c in self.label_column if c not in self.df.columns
+            ]
+            if missing:
+                raise KeyError(
+                    f"Label columns missing from dataframe: {missing}"
+                )
+            self._labels = (
+                self.df[self.label_column].astype(float).values.tolist()
+            )
+            self._num_labels = len(self.label_column)
+        else:
+            if self.label_column not in self.df.columns:
+                raise KeyError(
+                    f"Label column missing from dataframe: {self.label_column}"
+                )
+            self._labels = self.df[self.label_column].astype(float).tolist()
+            self._num_labels = 1
+
+        # estimate char lengths as before...
         self._lengths = []
         for idx in tqdm(
             range(len(self.df)), desc="Estimating lengths", total=len(self.df)
@@ -158,8 +180,17 @@ class DiscussionDataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         text = self._build_sequence(idx)
-        label = float(self.df.at[idx, self.label_column])
-        return {"text": text, "label": label}
+        label = self._labels[idx]
+        # return torch tensor for labels (multi-label -> float vector)
+        label_tensor = (
+            torch.tensor(label, dtype=torch.float)
+            if isinstance(label, (list, tuple))
+            else torch.tensor([label], dtype=torch.float)
+        )
+        # if you prefer single-dim scalar for single-label, you can do:
+        if self._num_labels == 1:
+            label_tensor = label_tensor.squeeze(0)  # shape () scalar float
+        return {"text": text, "label": label_tensor}
 
 
 class WeightedLossTrainer(transformers.Trainer):
