@@ -32,14 +32,6 @@ whow:
       - "Do you want to go first?"
       - "Please move to the left side and turn on your mic!"
 
-  Mixed Motive:
-    description: >
-      Utterances that express more than one motive simultaneously.
-    examples:
-      - "I am very sorry about the incident, but few exceptions cannot defy the statistic majority."
-      - "My daughter dies because of a broken traffic light."
-      - "Sorry, John, I spoke over you, go ahead?"
-      - "Okay—thank you, we—those are good, those are all questions and they’re quite good and brief."
 
   Probing:
     description: >
