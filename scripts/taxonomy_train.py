@@ -56,7 +56,6 @@ def train_model(
     train_ds,
     val_ds,
     freeze_base_model: bool,
-    pos_weights,
     output_dir: Path,
     logs_dir: Path,
     tokenizer,
@@ -104,7 +103,6 @@ def train_model(
 
     trainer = util.classification.BucketedTrainer(
         bucket_batch_size=BATCH_SIZE,
-        pos_weight=torch.tensor(pos_weights),
         model=model,
         args=training_args,
         train_dataset=train_ds,
@@ -183,11 +181,6 @@ def main(args):
     label_names = [f.stem for f in labels_dir.glob("*.csv")]
     num_labels = len(label_names)
 
-    pos_weights = []
-    for name in label_names:
-        neg, pos = (df[name] == 0).sum(), (df[name] == 1).sum()
-        pos_weights.append(neg / max(pos, 1))
-
     train_df, val_df, test_df = util.classification._train_validate_test_split(
         df,
         train_percent=0.7,
@@ -207,7 +200,6 @@ def main(args):
             train_ds,
             val_ds,
             FINETUNE_ONLY_HEAD,
-            pos_weights,
             output_dir,
             logs_dir,
             tokenizer,
