@@ -6,6 +6,8 @@ dependencies:
   - python>=3.13
   - pandas
   - numpy
+  - seaborn
+  - matplotlib
   - tqdm
   - openpyxl
   - moreutils

@@ -55,7 +55,9 @@ def setup_logging(logs_dir: Path):
         interval=1,
         backupCount=30,
         encoding="utf-8",
-        utc=False,  # use local time for rollover; switch to True only if you want UTC-based dates
+        utc=False,
+        # use local time for rollover; switch to True only
+        # if you want UTC-based dates
     )
     file_handler.suffix = "%Y-%m-%d"
     file_handler.setFormatter(
@@ -166,7 +168,8 @@ def select_mod_ids(
         (full_corpus.is_moderator) & (full_corpus.moderation_supported)
     ]
 
-    # Inferred moderator comments: non-moderators whose message_id is in high_conf_ids
+    # Inferred moderator comments: non-moderators whose message_id is in
+    # high_conf_ids
     inferred_mod_comments = full_corpus[
         full_corpus.message_id.isin(high_conf_ids)
     ]
@@ -300,7 +303,8 @@ def process_tactic(
 
 def comment_is_tactic(prompt: str, generator) -> bool:
     """
-    Uses the transformers pipeline to ask the model. Expects the model to answer with 'yes' or 'no'.
+    Uses the transformers pipeline to ask the model.
+    Expects the model to answer with 'yes' or 'no'.
     Parses the first clear yes/no.
     """
     try:

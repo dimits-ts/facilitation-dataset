@@ -4,6 +4,7 @@ import subprocess
 from pathlib import Path
 
 import pandas as pd
+import matplotlib.pyplot as plt
 from tqdm.auto import tqdm
 
 
@@ -50,3 +51,16 @@ def _append_batch_to_csv(
 ) -> None:
     mode = "w" if first_batch else "a"
     df_batch.to_csv(out_path, mode=mode, header=first_batch, index=False)
+
+
+def save_plot(path: Path) -> None:
+    """
+    Saves a plot to the specified filepath.
+
+    :param path: The full path (including filename)
+        where the plot will be saved.
+    :type path: pathlib.Path
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    plt.savefig(path, bbox_inches="tight", dpi=300)
+    print(f"Figure saved to {path.resolve()}")
