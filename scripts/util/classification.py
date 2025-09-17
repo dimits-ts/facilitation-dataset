@@ -68,7 +68,9 @@ class DiscussionDataset(torch.utils.data.Dataset):
         # estimate char lengths as before...
         self._lengths = []
         for idx in tqdm(
-            range(len(self.df)), desc="Estimating lengths", total=len(self.df)
+            range(len(self.df)),
+            desc="Optimizing context width",
+            total=len(self.df),
         ):
             char_len = self._heuristic_char_length(idx)
             self._lengths.append(char_len)
