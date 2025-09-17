@@ -248,7 +248,7 @@ def main(args) -> None:
 
     pos_weight = (df[target_label] == 0).sum() / (df[target_label] == 1).sum()
 
-    train_df, val_df, test_df = util.classification._train_validate_test_split(
+    train_df, val_df, test_df = util.classification.train_validate_test_split(
         df,
         stratify_col=target_label,
         train_percent=0.7,

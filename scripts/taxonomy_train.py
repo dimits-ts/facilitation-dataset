@@ -25,7 +25,7 @@ CTX_LENGTH_COMMENTS = 4
 def load_labels(base_df: pd.DataFrame, labels_dir: Path) -> pd.DataFrame:
     df = base_df.copy()
     for label_file in tqdm(
-        list(labels_dir.glob("*.csv")), desc="Loading labels"
+        list(labels_dir.glob("*.csv"))[:2], desc="Loading labels"
     ):
         label_name = label_file.stem
         label_df = pd.read_csv(label_file)
@@ -181,7 +181,7 @@ def main(args):
     label_names = [f.stem for f in labels_dir.glob("*.csv")]
     num_labels = len(label_names)
 
-    train_df, val_df, test_df = util.classification._train_validate_test_split(
+    train_df, val_df, test_df = util.classification.train_validate_test_split(
         df,
         train_percent=0.7,
         validate_percent=0.2,
