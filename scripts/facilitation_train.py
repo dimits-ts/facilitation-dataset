@@ -118,6 +118,7 @@ def test_model(
     def make_ds(df):
         return util.classification.DiscussionDataset(
             df.reset_index(drop=True),
+            df.reset_index(drop=True),
             tokenizer,
             MAX_LENGTH,
             label_column=label_column,

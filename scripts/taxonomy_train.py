@@ -159,11 +159,12 @@ def collate_fn(tokenizer, batch: list[dict[str, str | list]], num_labels: int):
 
 
 def main(args):
-    def make_dataset(df_):
+    def make_dataset(target_df):
         return util.classification.DiscussionDataset(
-            df_,
-            tokenizer,
-            MAX_LENGTH,
+            target_df,
+            full_df=df,   # full dataset for context
+            tokenizer=tokenizer,
+            max_length=MAX_LENGTH,
             label_column=label_names,
             max_context_turns=CTX_LENGTH_COMMENTS,
         )
@@ -172,6 +173,8 @@ def main(args):
     labels_dir = Path(args.labels_dir)
     output_dir = Path(args.output_dir)
     logs_dir = Path(args.logs_dir)
+    label_names = [f.stem for f in labels_dir.glob("*.csv")]
+    num_labels = len(label_names)
 
     util.classification.set_seed(util.classification.SEED)
 
@@ -179,22 +182,22 @@ def main(args):
     df = util.classification.preprocess_dataset(df)
     df = load_labels(df, labels_dir)
 
-    label_names = [f.stem for f in labels_dir.glob("*.csv")]
-    num_labels = len(label_names)
+    # keep only annotated rows as targets
+    target_mask = df[label_names].sum(axis=1) > 0
+    target_df = df[target_mask].copy()
 
     train_df, val_df, test_df = util.classification.train_validate_test_split(
-        df,
+        target_df,
         train_percent=0.7,
         validate_percent=0.2,
     )
 
-    tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
-
-    # adapt dataset class to support multi-label
     print("Creating train dataset...")
     train_ds = make_dataset(train_df)
     print("Creating validation dataset...")
     val_ds = make_dataset(val_df)
+
+    tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
 
     if not args.only_test:
         print("Starting training")

@@ -24,13 +24,15 @@ class DiscussionDataset(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        df: pd.DataFrame,
-        tokenizer: transformers.PreTrainedTokenizerBase,
-        max_length: int,
-        label_column: str | list[str],
-        max_context_turns: int = 4,
+        target_df,
+        full_df,
+        tokenizer,
+        max_length,
+        label_column,
+        max_context_turns=4,
     ):
-        self.df = df.reset_index(drop=True)
+        self.df = target_df.reset_index(drop=True)
+        self._id2row = full_df.set_index("message_id").to_dict("index")
         self.tokenizer = tokenizer
         self.max_length = max_length
         # Accept either a single label name or a list of label names
