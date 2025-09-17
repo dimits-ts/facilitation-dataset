@@ -40,11 +40,13 @@ def load_labels(base_df: pd.DataFrame, labels_dir: Path) -> pd.DataFrame:
             on="message_id",
             how="left",
         )
+
         df[label_name] = (
             df[label_name]
-            .fillna(False)
-            .astype(bool)  # ensure boolean first
-            .astype(int)  # then cast to int 0/1
+            .infer_objects(copy=False)  # clean up "object" dtype
+            .astype("boolean")  # use pandas nullable Boolean
+            .fillna(False)  # fill missing with False
+            .astype(int)  # finally cast to int (0/1)
         )
 
     return df
