@@ -198,7 +198,9 @@ class DiscussionDataset(torch.utils.data.Dataset):
 
 
 class WeightedLossTrainer(transformers.Trainer):
-    def __init__(self, pos_weight, *args, **kwargs):
+    def __init__(
+        self, pos_weight: Iterable[float] | None = None, *args, **kwargs
+    ):
         super().__init__(*args, **kwargs)
         self.pos_weight = torch.tensor([pos_weight])
 
