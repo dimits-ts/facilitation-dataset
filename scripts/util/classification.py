@@ -1,4 +1,5 @@
 import random
+from collections import Iterable
 
 import numpy as np
 import pandas as pd
@@ -382,3 +383,30 @@ class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
                 control.should_training_stop = True
 
         return control
+
+
+def results_to_df(
+    individual_raw: str, all_raw: str, test_metrics: Iterable[str]
+) -> pd.DataFrame:
+    # ── parse keys →   eval_<dataset>_<metric>  ──────────────────────────────
+    per_ds: dict[str, dict[str, float]] = {}
+    for k, v in individual_raw.items():
+        if not k.startswith("eval_"):
+            continue
+        _, rest = k.split("_", 1)  # drop leading 'eval_'
+        # split once from the right so dataset names with '_' are handled
+        ds, metric = rest.rsplit("_", 1)
+        if metric in test_metrics:
+            per_ds.setdefault(ds, {})[metric] = v
+
+    # ── add aggregate (“ALL”) row ────────────────────────────────────────────
+    per_ds["ALL"] = {m: all_raw[f"eval_{m}"] for m in test_metrics}
+
+    # ── to DataFrame, ordered columns ────────────────────────────────────────
+    df_metrics = (
+        pd.DataFrame.from_dict(per_ds, orient="index")
+        .reindex(columns=["loss", "accuracy", "f1"])  # fixed order
+        .sort_index()
+    )
+
+    return df_metrics

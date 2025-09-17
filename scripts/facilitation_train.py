@@ -92,31 +92,6 @@ def train_model(
     tokenizer.save_pretrained(finetuned_model_dir)
 
 
-def results_to_df(individual_raw: str, all_raw: str) -> pd.DataFrame:
-    # ── parse keys →   eval_<dataset>_<metric>  ──────────────────────────────
-    per_ds: dict[str, dict[str, float]] = {}
-    for k, v in individual_raw.items():
-        if not k.startswith("eval_"):
-            continue
-        _, rest = k.split("_", 1)  # drop leading 'eval_'
-        # split once from the right so dataset names with '_' are handled
-        ds, metric = rest.rsplit("_", 1)
-        if metric in TEST_METRICS:
-            per_ds.setdefault(ds, {})[metric] = v
-
-    # ── add aggregate (“ALL”) row ────────────────────────────────────────────
-    per_ds["ALL"] = {m: all_raw[f"eval_{m}"] for m in TEST_METRICS}
-
-    # ── to DataFrame, ordered columns ────────────────────────────────────────
-    df_metrics = (
-        pd.DataFrame.from_dict(per_ds, orient="index")
-        .reindex(columns=["loss", "accuracy", "f1"])  # fixed order
-        .sort_index()
-    )
-
-    return df_metrics
-
-
 def test_model(
     output_dir: Path,
     test_df: pd.DataFrame,
@@ -170,7 +145,11 @@ def test_model(
 
     individual_raw = trainer.evaluate(eval_dataset=eval_dict)
     all_raw = trainer.evaluate(eval_dataset=full_ds)
-    res_df = results_to_df(individual_raw=individual_raw, all_raw=all_raw)
+    res_df = util.classification.results_to_df(
+        individual_raw=individual_raw,
+        all_raw=all_raw,
+        test_metrics=TEST_METRICS,
+    )
     return res_df
 
 
