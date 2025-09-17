@@ -1,6 +1,6 @@
 if [ ! -d "$MOD_MODEL_PATH" ]; then
     echo "Moderator trained model directory does not exist. Training model..."
-    python ../scripts/model_train.py \
+    python ../scripts/facilitation_train.py \
         --output_dir=checkpoints/mod/all \
         --logs_dir=logs/mod/all \
         --dataset_path=pefk.csv \
@@ -10,9 +10,9 @@ else
 fi
 
 echo "Detecting moderator comments in dataset..."
-python scripts/model_inference.py \
+python scripts/facilitation_inference.py \
         --model_dir checkpoints/mod/all/best_model \
         --source_dataset_path=pefk.csv \
-        --destination_dataset_path=pefk_mod.csv
+        --destination_dataset_path=output_datasets/pefk_mod.csv
 
 echo "Finished."
