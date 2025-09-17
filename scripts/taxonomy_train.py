@@ -5,6 +5,7 @@ import pandas as pd
 import torch
 import transformers
 import sklearn.metrics
+from tqdm.auto import tqdm
 
 import util.classification
 import util.io
@@ -23,7 +24,9 @@ CTX_LENGTH_COMMENTS = 4
 
 def load_labels(base_df: pd.DataFrame, labels_dir: Path) -> pd.DataFrame:
     df = base_df.copy()
-    for label_file in labels_dir.glob("*.csv"):
+    for label_file in tqdm(
+        list(labels_dir.glob("*.csv")), desc="Loading labels"
+    ):
         label_name = label_file.stem
         label_df = pd.read_csv(label_file)
         if not {"message_id", "is_match"}.issubset(label_df.columns):
@@ -37,7 +40,13 @@ def load_labels(base_df: pd.DataFrame, labels_dir: Path) -> pd.DataFrame:
             on="message_id",
             how="left",
         )
-        df[label_name] = df[label_name].fillna(False).astype(int)
+        df[label_name] = (
+            df[label_name]
+            .fillna(False)
+            .astype(bool)  # ensure boolean first
+            .astype(int)  # then cast to int 0/1
+        )
+
     return df
 
 
@@ -149,6 +158,15 @@ def collate_fn(tokenizer, batch: list[dict[str, str | list]], num_labels: int):
 
 
 def main(args):
+    def make_dataset(df_):
+        return util.classification.DiscussionDataset(
+            df_,
+            tokenizer,
+            MAX_LENGTH,
+            label_column=label_names,
+            max_context_turns=CTX_LENGTH_COMMENTS,
+        )
+
     dataset_path = Path(args.dataset_path)
     labels_dir = Path(args.labels_dir)
     output_dir = Path(args.output_dir)
@@ -176,20 +194,13 @@ def main(args):
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
 
-    def make_dataset(df_):
-        return util.classification.DiscussionDataset(
-            df_,
-            tokenizer,
-            MAX_LENGTH,
-            label_column=label_names,
-            max_context_turns=CTX_LENGTH_COMMENTS,
-        )
-
     # adapt dataset class to support multi-label
+    print("Creating training datasets...")
     train_ds = make_dataset(train_df)
     val_ds = make_dataset(val_df)
 
     if not args.only_test:
+        print("Starting training")
         train_model(
             train_ds,
             val_ds,
@@ -201,7 +212,7 @@ def main(args):
             num_labels,
         )
 
-    print("Training complete. (Testing logic can be added similarly.)")
+    print("Training complete.")
 
 
 if __name__ == "__main__":
