@@ -2,7 +2,9 @@ from pathlib import Path
 import argparse
 
 import pandas as pd
+import numpy as np
 import torch
+import torch.utils.data
 import transformers
 import sklearn.metrics
 from tqdm.auto import tqdm
@@ -61,7 +63,7 @@ def train_model(
     output_dir: Path,
     logs_dir: Path,
     tokenizer,
-    label_names: list[str]
+    label_names: list[str],
 ) -> None:
     def collate(batch):
         return collate_fn(tokenizer, batch, num_labels)
@@ -125,6 +127,84 @@ def train_model(
     trainer.train(resume_from_checkpoint=checkpoint)
     trainer.save_model(output_dir / "best_model")
     tokenizer.save_pretrained(output_dir / "best_model")
+
+
+def evaluate_model(
+    model_dir: Path,
+    tokenizer,
+    test_ds,
+    label_names: list[str],
+    batch_size=24,
+):
+    """
+    Compute per-label accuracy and F1 on test_ds.
+    Returns a DataFrame with one row per label and micro/macro metrics.
+    """
+    # ── load checkpoint ────────────────────────────────────────────────────
+    best_model_dir = model_dir / "best_model"
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        best_model_dir,
+        reference_compile=False,
+        attn_implementation="eager",
+        num_labels=len(label_names),
+        problem_type="multi_label_classification",
+    )
+
+    model.eval()
+    preds = []
+    labels = []
+
+    loader = torch.utils.data.DataLoader(
+        test_ds,
+        batch_size=batch_size,
+        collate_fn=lambda b: collate_fn(tokenizer, b, len(label_names)),
+    )
+
+    with torch.no_grad():
+        for batch in loader:
+            input_ids = batch["input_ids"].to(model.device)
+            attention_mask = batch["attention_mask"].to(model.device)
+            batch_labels = batch["labels"].cpu().numpy()
+            logits = model(
+                input_ids=input_ids, attention_mask=attention_mask
+            ).logits
+            batch_preds = (logits.cpu().numpy() > 0).astype(int)
+
+            preds.append(batch_preds)
+            labels.append(batch_labels)
+
+    preds = np.vstack(preds)
+    labels = np.vstack(labels)
+
+    results = []
+    for i, name in enumerate(label_names):
+        results.append(
+            {
+                "label": name,
+                "accuracy": sklearn.metrics.accuracy_score(
+                    labels[:, i], preds[:, i]
+                ),
+                "f1": sklearn.metrics.f1_score(labels[:, i], preds[:, i]),
+            }
+        )
+
+    # Add aggregate metrics
+    results.append(
+        {
+            "label": "micro_f1",
+            "accuracy": None,
+            "f1": sklearn.metrics.f1_score(labels, preds, average="micro"),
+        }
+    )
+    results.append(
+        {
+            "label": "macro_f1",
+            "accuracy": None,
+            "f1": sklearn.metrics.f1_score(labels, preds, average="macro"),
+        }
+    )
+
+    return pd.DataFrame(results)
 
 
 def compute_metrics_multi(eval_pred, label_names=None):
@@ -202,9 +282,10 @@ def main(args):
     logs_dir = Path(args.logs_dir)
     label_names = [f.stem for f in labels_dir.glob("*.csv")]
     tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
-
+    results_csv_path = logs_dir / "res.csv"
     util.classification.set_seed(util.classification.SEED)
 
+    # ================ Dataset preprocessing ================
     df = util.io.progress_load_csv(dataset_path)
     df = util.classification.preprocess_dataset(df)
     df = load_labels(df, labels_dir)
@@ -223,7 +304,10 @@ def main(args):
     train_ds = make_dataset(train_df, tokenizer)
     print("Creating validation dataset...")
     val_ds = make_dataset(val_df, tokenizer)
+    print("Creating test dataset...")
+    test_ds = make_dataset(test_df, tokenizer)
 
+    # ================ Training ================
     if not args.only_test:
         print("Starting training")
         train_model(
@@ -235,8 +319,21 @@ def main(args):
             tokenizer,
             label_names,
         )
+        print("Training complete.")
 
-    print("Training complete.")
+    # ================ Evaluation ================
+    print("Evaluating model...")
+    res_df = evaluate_model(
+        model_dir=output_dir,
+        test_ds=test_ds,
+        tokenizer=tokenizer,
+        label_names=label_names,
+        batch_size=BATCH_SIZE,
+    )
+    print("Results")
+    print(res_df)
+    res_df.to_csv(results_csv_path)
+    print(f"Results saved to {results_csv_path}")
 
 
 if __name__ == "__main__":
