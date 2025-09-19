@@ -44,10 +44,11 @@ def load_labels(base_df: pd.DataFrame, labels_dir: Path) -> pd.DataFrame:
 
         df[label_name] = (
             df[label_name]
-            .infer_objects(copy=False)  # clean up "object" dtype
-            .astype("boolean")  # use pandas nullable Boolean
-            .fillna(False)  # fill missing with False
-            .astype(int)  # finally cast to int (0/1)
+            # object -> boolean
+            .infer_objects(copy=False)
+            .astype("boolean")
+            .fillna(False)
+            .astype(int)
         )
 
     return df
@@ -61,7 +62,7 @@ def train_model(
     logs_dir: Path,
     tokenizer,
     num_labels: int,
-):
+) -> None:
     def collate(batch):
         return collate_fn(tokenizer, batch, num_labels)
 
@@ -71,7 +72,7 @@ def train_model(
         attn_implementation="eager",
         num_labels=num_labels,
         problem_type="multi_label_classification",
-    )
+    ).to("cuda")
 
     if freeze_base_model:
         for param in model.base_model.parameters():
@@ -145,7 +146,9 @@ def compute_metrics_multi(eval_pred):
 
 def collate_fn(tokenizer, batch: list[dict[str, str | list]], num_labels: int):
     texts = [b["text"] for b in batch]
-    labels = torch.tensor([b["label"] for b in batch]).float()
+    labels = torch.stack(
+        [torch.tensor(b["label"], dtype=torch.float) for b in batch]
+    )
 
     enc = tokenizer(
         texts,
@@ -159,10 +162,10 @@ def collate_fn(tokenizer, batch: list[dict[str, str | list]], num_labels: int):
 
 
 def main(args):
-    def make_dataset(target_df):
+    def make_dataset(target_df, tokenizer):
         return util.classification.DiscussionDataset(
             target_df,
-            full_df=df,   # full dataset for context
+            full_df=df,  # full dataset for context
             tokenizer=tokenizer,
             max_length=MAX_LENGTH,
             label_column=label_names,
@@ -175,6 +178,7 @@ def main(args):
     logs_dir = Path(args.logs_dir)
     label_names = [f.stem for f in labels_dir.glob("*.csv")]
     num_labels = len(label_names)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
 
     util.classification.set_seed(util.classification.SEED)
 
@@ -193,11 +197,9 @@ def main(args):
     )
 
     print("Creating train dataset...")
-    train_ds = make_dataset(train_df)
+    train_ds = make_dataset(train_df, tokenizer)
     print("Creating validation dataset...")
-    val_ds = make_dataset(val_df)
-
-    tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
+    val_ds = make_dataset(val_df, tokenizer)
 
     if not args.only_test:
         print("Starting training")

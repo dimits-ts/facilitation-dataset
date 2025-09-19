@@ -142,6 +142,7 @@ def test_model(
         eval_dataset=None,
         compute_metrics=util.classification.compute_metrics,
         data_collator=lambda b: collate_fn(tokenizer, b),
+        device="cuda"
     )
 
     individual_raw = trainer.evaluate(eval_dataset=eval_dict)

@@ -39,7 +39,6 @@ class DiscussionDataset(torch.utils.data.Dataset):
         self.label_column = label_column
         self.max_context_turns = max_context_turns
 
-        self._id2row = self.df.set_index("message_id").to_dict("index")
         self._texts = self.df["text"].tolist()
         self._reply_to = self.df["reply_to"].tolist()
         self._message_ids = self.df["message_id"].tolist()
@@ -202,7 +201,9 @@ class WeightedLossTrainer(transformers.Trainer):
         self, pos_weight: Iterable[float] | None = None, *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
-        self.pos_weight = torch.tensor([pos_weight])
+        self.pos_weight = (
+            None if pos_weight is None else torch.tensor(pos_weight)
+        )
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
         labels = inputs.get("labels").float()
@@ -210,50 +211,15 @@ class WeightedLossTrainer(transformers.Trainer):
         logits = outputs.get("logits").view(-1)
         labels = labels.view(-1)
         loss_fct = torch.nn.BCEWithLogitsLoss(
-            pos_weight=self.pos_weight.to(logits.device)
+            pos_weight=(
+                None
+                if self.pos_weight is None
+                else self.pos_weight.to(logits.device)
+            )
         )
         loss = loss_fct(logits, labels)
 
         return (loss, outputs) if return_outputs else loss
-
-
-class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
-    """
-    Yields lists of indices such that items inside a batch have similar
-    sequence length.  That keeps padding - and thus compute - to a minimum.
-
-    • Batches are *shuffled* every epoch, but order inside each batch
-      is irrelevant (Trainer will not re-shuffle).
-    • Works for any dataset that yields a dict with 'input_ids'.
-    """
-
-    def __init__(self, dataset, batch_size, drop_last: bool = False):
-        self.dataset = dataset
-        self.batch_size = batch_size
-        self.drop_last = drop_last
-
-        # just ask the dataset
-        self.lengths = [dataset.length(i) for i in range(len(dataset))]
-        self.sorted_indices = sorted(
-            range(len(dataset)), key=self.lengths.__getitem__
-        )
-
-    def __iter__(self):
-        # -- bucketed indices, then shuffle buckets --
-        batches = [
-            self.sorted_indices[i:i + self.batch_size]
-            for i in range(0, len(self.sorted_indices), self.batch_size)
-        ]
-        if self.drop_last and len(batches[-1]) < self.batch_size:
-            batches = batches[:-1]
-
-        random.shuffle(batches)  # different order every epoch
-        for b in batches:
-            yield b
-
-    def __len__(self):
-        full, rest = divmod(len(self.sorted_indices), self.batch_size)
-        return full if (rest == 0 or self.drop_last) else full + 1
 
 
 class BucketedTrainer(WeightedLossTrainer):
@@ -302,6 +268,45 @@ class BucketedTrainer(WeightedLossTrainer):
             num_workers=4,
             pin_memory=torch.cuda.is_available(),
         )
+
+
+class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
+    """
+    Yields lists of indices such that items inside a batch have similar
+    sequence length.  That keeps padding - and thus compute - to a minimum.
+
+    • Batches are *shuffled* every epoch, but order inside each batch
+      is irrelevant (Trainer will not re-shuffle).
+    • Works for any dataset that yields a dict with 'input_ids'.
+    """
+
+    def __init__(self, dataset, batch_size, drop_last: bool = False):
+        self.dataset = dataset
+        self.batch_size = batch_size
+        self.drop_last = drop_last
+
+        # just ask the dataset
+        self.lengths = [dataset.length(i) for i in range(len(dataset))]
+        self.sorted_indices = sorted(
+            range(len(dataset)), key=self.lengths.__getitem__
+        )
+
+    def __iter__(self):
+        # -- bucketed indices, then shuffle buckets --
+        batches = [
+            self.sorted_indices[i:i+self.batch_size]
+            for i in range(0, len(self.sorted_indices), self.batch_size)
+        ]
+        if self.drop_last and len(batches[-1]) < self.batch_size:
+            batches = batches[:-1]
+
+        random.shuffle(batches)  # different order every epoch
+        for b in batches:
+            yield b
+
+    def __len__(self):
+        full, rest = divmod(len(self.sorted_indices), self.batch_size)
+        return full if (rest == 0 or self.drop_last) else full + 1
 
 
 class EarlyStoppingWithWarmupStepsCallback(transformers.TrainerCallback):
@@ -371,6 +376,7 @@ def preprocess_dataset(
 
 
 def set_seed(seed):
+    random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
@@ -378,10 +384,10 @@ def set_seed(seed):
 
 def compute_metrics(eval_pred):
     logits, labels = eval_pred
-    preds = (logits.reshape(-1) > 0).astype(int)
+    preds = (logits > 0).astype(int)
     return {
         "accuracy": sklearn.metrics.accuracy_score(labels, preds),
-        "f1": sklearn.metrics.f1_score(labels, preds),
+        "f1": sklearn.metrics.f1_score(labels, preds, average="macro"),
     }
 
 
