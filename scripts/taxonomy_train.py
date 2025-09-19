@@ -61,11 +61,12 @@ def train_model(
     output_dir: Path,
     logs_dir: Path,
     tokenizer,
-    num_labels: int,
+    label_names: list[str]
 ) -> None:
     def collate(batch):
         return collate_fn(tokenizer, batch, num_labels)
 
+    num_labels = len(label_names)
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
         MODEL,
         reference_compile=False,
@@ -109,7 +110,9 @@ def train_model(
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=val_ds,
-        compute_metrics=compute_metrics_multi,
+        compute_metrics=lambda eval_pred: compute_metrics_multi(
+            eval_pred, label_names=label_names
+        ),
         callbacks=[early_stopping],
         data_collator=collate,
     )
@@ -124,23 +127,44 @@ def train_model(
     tokenizer.save_pretrained(output_dir / "best_model")
 
 
-def compute_metrics_multi(eval_pred):
+def compute_metrics_multi(eval_pred, label_names=None):
+    """
+    Compute per-label accuracy/F1 and aggregate micro/macro F1.
+
+    Args:
+        eval_pred: tuple of (logits, labels) from HF Trainer
+        label_names: optional list of label names
+
+    Returns:
+        dict of metrics
+    """
     logits, labels = eval_pred
     preds = (logits > 0).astype(int)
+
     results = {}
-    for i in range(labels.shape[1]):
-        results[f"accuracy_label{i}"] = sklearn.metrics.accuracy_score(
+    n_labels = labels.shape[1] if labels.ndim > 1 else 1
+
+    for i in range(n_labels):
+        name = (
+            label_names[i]
+            if label_names is not None and i < len(label_names)
+            else f"label{i}"
+        )
+        results[f"accuracy_{name}"] = sklearn.metrics.accuracy_score(
             labels[:, i], preds[:, i]
         )
-        results[f"f1_label{i}"] = sklearn.metrics.f1_score(
+        results[f"f1_{name}"] = sklearn.metrics.f1_score(
             labels[:, i], preds[:, i]
         )
+
+    # aggregate metrics
     results["micro_f1"] = sklearn.metrics.f1_score(
         labels, preds, average="micro"
     )
     results["macro_f1"] = sklearn.metrics.f1_score(
         labels, preds, average="macro"
     )
+
     return results
 
 
@@ -177,7 +201,6 @@ def main(args):
     output_dir = Path(args.output_dir)
     logs_dir = Path(args.logs_dir)
     label_names = [f.stem for f in labels_dir.glob("*.csv")]
-    num_labels = len(label_names)
     tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
 
     util.classification.set_seed(util.classification.SEED)
@@ -210,7 +233,7 @@ def main(args):
             output_dir,
             logs_dir,
             tokenizer,
-            num_labels,
+            label_names,
         )
 
     print("Training complete.")
