@@ -11,11 +11,11 @@ import util.classification
 import util.io
 
 
-EVAL_STEPS = 4000
-EPOCHS = 120
+EVAL_STEPS = 500
+EPOCHS = 150
 MAX_LENGTH = 8192
 BATCH_SIZE = 24
-EARLY_STOP_WARMUP = 12000
+EARLY_STOP_WARMUP = 1000
 EARLY_STOP_THRESHOLD = 0.001
 EARLY_STOP_PATIENCE = 5
 FINETUNE_ONLY_HEAD = True
@@ -147,7 +147,7 @@ def compute_metrics_multi(eval_pred):
 def collate_fn(tokenizer, batch: list[dict[str, str | list]], num_labels: int):
     texts = [b["text"] for b in batch]
     labels = torch.stack(
-        [torch.tensor(b["label"], dtype=torch.float) for b in batch]
+        [torch.as_tensor(b["label"], dtype=torch.float) for b in batch]
     )
 
     enc = tokenizer(
