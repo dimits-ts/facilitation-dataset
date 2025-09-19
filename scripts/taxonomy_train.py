@@ -320,6 +320,8 @@ def main(args):
             label_names,
         )
         print("Training complete.")
+    else:
+        print("Skipping training as per cmd argument.")
 
     # ================ Evaluation ================
     print("Evaluating model...")
