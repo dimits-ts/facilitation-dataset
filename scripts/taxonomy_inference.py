@@ -30,8 +30,10 @@ def collate_fn(tokenizer, batch, max_length):
 def run_inference(
     model_dir: Path,
     dataset_path: Path,
+    mod_probability_path: Path,
     labels_dir: Path,
     output_csv: Path,
+    mod_probability_thres: float,
 ):
     # ── Load tokenizer and model ──────────────────────────────
     tokenizer = transformers.AutoTokenizer.from_pretrained(
@@ -50,6 +52,11 @@ def run_inference(
     # ── Load dataset ─────────────────────────────────────────
     df = util.io.progress_load_csv(dataset_path)
     df = util.classification.preprocess_dataset(df)
+    mod_df = util.io.classification.get_implied_actual_mod_df(
+        full_corpus=df,
+        mod_threshold=mod_probability_thres,
+        mod_probability_file=mod_probability_path,
+    )
 
     if "text" not in df.columns or "message_id" not in df.columns:
         raise ValueError(
@@ -64,7 +71,7 @@ def run_inference(
     # ── Prepare DiscussionDataset ───────────────────────────
     print("Creating dataset...")
     dataset = util.classification.DiscussionDataset(
-        target_df=df,
+        target_df=mod_df,
         full_df=df,  # full dataset needed for context
         tokenizer=tokenizer,
         max_length=MAX_LENGTH,
@@ -134,6 +141,22 @@ if __name__ == "__main__":
         required=True,
         help="Path to save predictions CSV",
     )
+    parser.add_argument(
+        "--mod_probability_path",
+        type=str,
+        required=True,
+        help="Path to mod probability CSV",
+    )
+    parser.add_argument(
+        "--mod_thres",
+        type=float,
+        required=False,
+        default=0.5,
+        help=(
+            "Probability threshold for a comment to be "
+            "considered facilitative"
+        ),
+    )
 
     args = parser.parse_args()
 
@@ -142,4 +165,6 @@ if __name__ == "__main__":
         dataset_path=Path(args.dataset_path),
         labels_dir=Path(args.labels_dir),
         output_csv=Path(args.output_csv),
+        mod_probability_path=Path(args.mod_probability_path),
+        mod_probability_thres=args.mod_thres,
     )

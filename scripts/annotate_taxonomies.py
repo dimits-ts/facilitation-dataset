@@ -149,39 +149,15 @@ def fetch_context_chain_comments(
     return list(reversed(context))
 
 
-def select_mod_ids(
+def get_sample(
     full_corpus: pd.DataFrame,
-    mod_threshold: float,
-    mod_probability_file: Path,
+    selected_corpus: pd.DataFrame,
 ) -> pd.Series:
-    # Load mod probability file and filter for inferred moderator comments
-    mod_prob_df = util.io.progress_load_csv(mod_probability_file)
-    high_conf_ids = set(
-        mod_prob_df.loc[
-            mod_prob_df.mod_probabilities.astype(float) >= mod_threshold,
-            "message_id",
-        ].dropna()
-    )
-
-    # Moderator-supported comments (true moderators)
-    mod_comments = full_corpus[
-        (full_corpus.is_moderator) & (full_corpus.moderation_supported)
-    ]
-
-    # Inferred moderator comments: non-moderators whose message_id is in
-    # high_conf_ids
-    inferred_mod_comments = full_corpus[
-        full_corpus.message_id.isin(high_conf_ids)
-    ]
-
-    selected = pd.concat(
-        [mod_comments, inferred_mod_comments], ignore_index=True
-    ).drop_duplicates()
     categories = full_corpus["dataset"].unique()
     n_per_cat = NUM_COMMENT_SAMPLE // len(categories)  # floor division
 
     sampled = (
-        selected.groupby("dataset")
+        selected_corpus.groupby("dataset")
         .apply(lambda g: g.sample(n=min(len(g), n_per_cat), random_state=42))
         .reset_index(drop=True)
     )
@@ -313,7 +289,7 @@ def comment_is_tactic(prompt: str, generator) -> bool:
             max_new_tokens=10,
         )
         # pipeline returns list with generated_text
-        res = output[0]["generated_text"][len(prompt) :].strip().lower()
+        res = output[0]["generated_text"][len(prompt):].strip().lower()
         res = parse_response(res)
         return res
     except Exception as e:
@@ -370,10 +346,13 @@ def main(args):
         + str(full_corpus.dataset.value_counts())
     )
 
-    classifiable_ids = select_mod_ids(
+    mod_corpus = util.io.classification.get_implied_actual_mod_df(
         full_corpus,
         mod_threshold=args.mod_probability_thres,
         mod_probability_file=Path(args.mod_probability_file),
+    )
+    classifiable_ids = get_sample(
+        full_corpus=full_corpus, selected_corpus=mod_corpus
     )
     logger.info(
         f"Selected {len(classifiable_ids)} random comments for annotation."
@@ -405,7 +384,9 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="Classify forum comments using taxonomy categories and an LLM."
+        description=(
+            "Classify forum comments using taxonomy categories and an LLM."
+        )
     )
     parser.add_argument(
         "--dataset_file",
@@ -435,14 +416,20 @@ if __name__ == "__main__":
     parser.add_argument(
         "--mod_probability_file",
         required=True,
-        help="Path to the mod probability CSV file (must contain message_id and mod_probability).",
+        help=(
+            "Path to the mod probability CSV file "
+            "(must contain message_id and mod_probability)."
+        ),
     )
     parser.add_argument(
         "--mod_probability_thres",
         required=False,
         type=float,
         default=0.5,
-        help="Probability threshold for a comment to be classified as moderated",
+        help=(
+            "Probability threshold for a comment to be classified "
+            "as moderated"
+        ),
     )
     args = parser.parse_args()
     main(args)

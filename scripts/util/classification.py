@@ -1,5 +1,6 @@
 import random
 from collections.abc import Iterable
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -9,6 +10,8 @@ import sklearn.model_selection
 import sklearn.metrics
 import transformers
 from tqdm.auto import tqdm
+
+import util.io
 
 SEED = 42
 
@@ -37,7 +40,6 @@ class DiscussionDataset(torch.utils.data.Dataset):
         self.max_length = max_length
         # Accept either a single label name or a list of label names
         self.label_column = label_column
-        self.max_context_turns = max_context_turns
 
         self._texts = self.df["text"].tolist()
         self._reply_to = self.df["reply_to"].tolist()
@@ -294,7 +296,7 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
     def __iter__(self):
         # -- bucketed indices, then shuffle buckets --
         batches = [
-            self.sorted_indices[i:i+self.batch_size]
+            self.sorted_indices[i: i + self.batch_size]
             for i in range(0, len(self.sorted_indices), self.batch_size)
         ]
         if self.drop_last and len(batches[-1]) < self.batch_size:
@@ -443,3 +445,35 @@ def results_to_df(
     )
 
     return df_metrics
+
+
+def get_implied_actual_mod_df(
+    full_corpus: pd.DataFrame,
+    mod_threshold: float,
+    mod_probability_file: Path,
+) -> pd.Series:
+    # Load mod probability file and filter for inferred moderator comments
+    mod_prob_df = util.io.progress_load_csv(mod_probability_file)
+    high_conf_ids = set(
+        mod_prob_df.loc[
+            mod_prob_df.mod_probabilities.astype(float) >= mod_threshold,
+            "message_id",
+        ].dropna()
+    )
+
+    # Moderator-supported comments (true moderators)
+    mod_comments = full_corpus[
+        (full_corpus.is_moderator) & (full_corpus.moderation_supported)
+    ]
+
+    # Inferred moderator comments: non-moderators whose message_id is in
+    # high_conf_ids
+    inferred_mod_comments = full_corpus[
+        full_corpus.message_id.isin(high_conf_ids)
+    ]
+
+    selected = pd.concat(
+        [mod_comments, inferred_mod_comments], ignore_index=True
+    ).drop_duplicates()
+
+    return selected
