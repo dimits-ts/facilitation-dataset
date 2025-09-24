@@ -200,7 +200,7 @@ def evaluate_model(
     results.append(
         {
             "label": "micro_avg",
-            "accuracy": None,
+            "accuracy": sklearn.metrics.accuracy_score(labels, preds),
             "precision": sklearn.metrics.precision_score(
                 labels, preds, average="micro", zero_division=0
             ),
@@ -215,7 +215,7 @@ def evaluate_model(
     results.append(
         {
             "label": "macro_avg",
-            "accuracy": None,
+            "accuracy": sklearn.metrics.accuracy_score(labels, preds),
             "precision": sklearn.metrics.precision_score(
                 labels, preds, average="macro", zero_division=0
             ),
