@@ -8,9 +8,10 @@ import transformers
 import util.classification
 import util.io
 
-MAX_LENGTH = 8192
-BATCH_SIZE = 32
+MAX_LENGTH = 8192  # same as training
 MODEL = "answerdotai/ModernBERT-base"  # same as training
+CTX_LENGTH_COMMENTS = 4  # same as training
+BATCH_SIZE = 32
 
 
 def collate_fn(tokenizer, batch, max_length):
@@ -43,11 +44,10 @@ def run_inference(
     ).to("cuda")
     model.eval()
 
-    # ── Load label names (from the training label CSVs) ───────
+    # ── Load label names ─────────────────────────────────────
     label_names = [f.stem for f in labels_dir.glob("*.csv")]
-    print(f"Detected labels: {label_names}")
 
-    # ── Load dataset ──────────────────────────────────────────
+    # ── Load dataset ─────────────────────────────────────────
     df = util.io.progress_load_csv(dataset_path)
     df = util.classification.preprocess_dataset(df)
 
@@ -56,32 +56,51 @@ def run_inference(
             "Dataset must contain 'message_id' and 'text' columns."
         )
 
+    # ── Merge label placeholders (so dataset works with DiscussionDataset) ──
+    for label_name in label_names:
+        if label_name not in df.columns:
+            df[label_name] = 0  # dummy label for inference
+
+    # ── Prepare DiscussionDataset ───────────────────────────
+    print("Creating dataset...")
+    dataset = util.classification.DiscussionDataset(
+        target_df=df,
+        full_df=df,  # full dataset needed for context
+        tokenizer=tokenizer,
+        max_length=MAX_LENGTH,
+        label_column=label_names,
+        max_context_turns=CTX_LENGTH_COMMENTS,
+    )
+
     device = model.device
-
-    # ── Prepare batches ───────────────────────────────────────
     results = []
-    model.eval()
 
-    for i in tqdm(range(0, len(df), BATCH_SIZE), desc="Running inference"):
-        batch_df = df.iloc[i: i + BATCH_SIZE]
-        batch = [{"text": text} for text in batch_df["text"].tolist()]
+    loader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=BATCH_SIZE,
+        collate_fn=lambda b: collate_fn(tokenizer, b, len(label_names)),
+    )
 
-        enc = collate_fn(tokenizer, batch, MAX_LENGTH)
-        input_ids = enc["input_ids"].to(device)
-        attention_mask = enc["attention_mask"].to(device)
+    # ── Run inference ───────────────────────────────────────
+    for batch in tqdm(loader, desc="Running inference"):
+        input_ids = batch["input_ids"].to(device)
+        attention_mask = batch["attention_mask"].to(device)
 
         logits = model(
             input_ids=input_ids, attention_mask=attention_mask
         ).logits
         preds = (logits > 0).int().cpu().numpy()
 
-        for mid, pred in zip(batch_df["message_id"], preds):
+        batch_message_ids = [
+            dataset._message_ids[i] for i in range(len(batch["input_ids"]))
+        ]
+        for mid, pred in zip(batch_message_ids, preds):
             row = {"message_id": mid}
             for label_name, p in zip(label_names, pred):
                 row[label_name] = int(p)
             results.append(row)
 
-    # ── Save predictions ──────────────────────────────────────
+    # ── Save predictions ─────────────────────────────────────
     out_df = pd.DataFrame(results)
     out_df.to_csv(output_csv, index=False)
     print(f"Predictions saved to {output_csv}")
