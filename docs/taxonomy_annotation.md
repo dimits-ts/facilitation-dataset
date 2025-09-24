@@ -13,7 +13,9 @@ Additionally, since the sizes of our datasets do not reflect real-world populati
 
 
 ### LLM Classification
-We consider the bottom-level tactics for each of the $4$ taxonomies considered (see [the taxonomy file](llm_classification/taxonomy.yaml)). We then run a binary classification task using an open-source LLM for each of these 32 tactics (we ignore the "Mixed Motive" tactic from WHoW, since our classification formulation inherently takes care of multiple labels).
+- [Execution script](../scripts/annotate_taxonomies.py)
+
+We reduce each of the four taxonomies (see [the taxonomy file](llm_classification/taxonomy.yaml)) to single-level classifications, group by the taxonomy they belong to. We then run a binary classification task using an open-source LLM for each of these 32 tactics (we ignore the "Mixed Motive" tactic from WHoW, since our classification formulation inherently takes care of multiple labels).
 
 For each tactic we include the name, description and a few examples, which were provided by the papers introducing them. For each comment we include its contents, as well as two preceding comments as context. Each comment is allowed a maximum of $2000$ characters due to VRAM concerns.
 
@@ -21,7 +23,13 @@ We use a LLaMa3.3-70b instruction-tuned model quantized to four bits. The instru
 
 
 ### Transformer-model Classification
+
+- [Training script](../scripts/taxonomy_train.py)
+- [Inference script](../scripts/taxonomy_inference.py)
+
 In order to annotate the entire dataset with each of the 32 tactics, we train a [Modern Bert](https://huggingface.co/docs/transformers/main/model_doc/modernbert) model on the LLM-annotated data. We do not use the human annotations provided by some of the datasets. The results are then appended to the dataset.
+
+We use a context width of four comments, utilizing the same XML schema as in [facilitation detection](./facilitation_detection.md), with the same length restrictions.
 
 Our model performs exceptionally well in almost all tactics. A summary of the evaluation on the test-set can be found below.
 
@@ -29,5 +37,4 @@ Our model performs exceptionally well in almost all tactics. A summary of the ev
 
 Training and inference were executed on a single Quadro RTX GPU. Training time was approximately 8 hours, and inference time 50 hours. 
 
-- [Training script](../scripts/taxonomy_train.py)
-- [Inference script](../scripts/taxonomy_inference.py)
+
