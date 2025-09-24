@@ -20,6 +20,7 @@ def main():
     print(f"Removed {len(deleted_comments)} deleted comments")
     df = df[~deleted_comments]
 
+    # keep pure derailment as note
     df.meta = df.meta.apply(lambda _dict: f"Derailment={_dict['score']}")
     df = df.rename(
         columns={
