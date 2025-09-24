@@ -161,7 +161,7 @@ def evaluate_model(
     )
 
     with torch.no_grad():
-        for batch in loader:
+        for batch in tqdm(loader, desc="Test"):
             input_ids = batch["input_ids"].to(model.device)
             attention_mask = batch["attention_mask"].to(model.device)
             batch_labels = batch["labels"].cpu().numpy()
