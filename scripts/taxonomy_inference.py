@@ -10,8 +10,8 @@ import util.io
 
 MAX_LENGTH = 8192  # same as training
 MODEL = "answerdotai/ModernBERT-base"  # same as training
-CTX_LENGTH_COMMENTS = 4  # same as training
-BATCH_SIZE = 32
+CTX_LENGTH_COMMENTS = 2
+BATCH_SIZE = 64
 
 
 def collate_fn(tokenizer, batch, max_length):

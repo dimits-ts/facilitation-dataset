@@ -16,13 +16,13 @@ import util.io
 EVAL_STEPS = 500
 EPOCHS = 150
 MAX_LENGTH = 8192
-BATCH_SIZE = 24
+BATCH_SIZE = 32
 EARLY_STOP_WARMUP = 1000
 EARLY_STOP_THRESHOLD = 0.001
 EARLY_STOP_PATIENCE = 5
 FINETUNE_ONLY_HEAD = True
 MODEL = "answerdotai/ModernBERT-base"
-CTX_LENGTH_COMMENTS = 4
+CTX_LENGTH_COMMENTS = 2
 
 
 def load_labels(base_df: pd.DataFrame, labels_dir: Path) -> pd.DataFrame:
