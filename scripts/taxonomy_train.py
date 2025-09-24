@@ -161,7 +161,7 @@ def evaluate_model(
     )
 
     with torch.no_grad():
-        for batch in tqdm(loader, desc="Test"):
+        for batch in tqdm(loader, desc="Running evaluation"):
             input_ids = batch["input_ids"].to(model.device)
             attention_mask = batch["attention_mask"].to(model.device)
             batch_labels = batch["labels"].cpu().numpy()
@@ -184,23 +184,47 @@ def evaluate_model(
                 "accuracy": sklearn.metrics.accuracy_score(
                     labels[:, i], preds[:, i]
                 ),
-                "f1": sklearn.metrics.f1_score(labels[:, i], preds[:, i]),
+                "precision": sklearn.metrics.precision_score(
+                    labels[:, i], preds[:, i], zero_division=0
+                ),
+                "recall": sklearn.metrics.recall_score(
+                    labels[:, i], preds[:, i], zero_division=0
+                ),
+                "f1": sklearn.metrics.f1_score(
+                    labels[:, i], preds[:, i], zero_division=0
+                ),
             }
         )
 
     # Add aggregate metrics
     results.append(
         {
-            "label": "micro_f1",
+            "label": "micro_avg",
             "accuracy": None,
-            "f1": sklearn.metrics.f1_score(labels, preds, average="micro"),
+            "precision": sklearn.metrics.precision_score(
+                labels, preds, average="micro", zero_division=0
+            ),
+            "recall": sklearn.metrics.recall_score(
+                labels, preds, average="micro", zero_division=0
+            ),
+            "f1": sklearn.metrics.f1_score(
+                labels, preds, average="micro", zero_division=0
+            ),
         }
     )
     results.append(
         {
-            "label": "macro_f1",
+            "label": "macro_avg",
             "accuracy": None,
-            "f1": sklearn.metrics.f1_score(labels, preds, average="macro"),
+            "precision": sklearn.metrics.precision_score(
+                labels, preds, average="macro", zero_division=0
+            ),
+            "recall": sklearn.metrics.recall_score(
+                labels, preds, average="macro", zero_division=0
+            ),
+            "f1": sklearn.metrics.f1_score(
+                labels, preds, average="macro", zero_division=0
+            ),
         }
     )
 
@@ -209,7 +233,7 @@ def evaluate_model(
 
 def compute_metrics_multi(eval_pred, label_names=None):
     """
-    Compute per-label accuracy/F1 and aggregate micro/macro F1.
+    Compute per-label accuracy/F1/precision/recall and aggregate micro/macro.
 
     Args:
         eval_pred: tuple of (logits, labels) from HF Trainer
@@ -233,16 +257,35 @@ def compute_metrics_multi(eval_pred, label_names=None):
         results[f"accuracy_{name}"] = sklearn.metrics.accuracy_score(
             labels[:, i], preds[:, i]
         )
+        results[f"precision_{name}"] = sklearn.metrics.precision_score(
+            labels[:, i], preds[:, i], zero_division=0
+        )
+        results[f"recall_{name}"] = sklearn.metrics.recall_score(
+            labels[:, i], preds[:, i], zero_division=0
+        )
         results[f"f1_{name}"] = sklearn.metrics.f1_score(
-            labels[:, i], preds[:, i]
+            labels[:, i], preds[:, i], zero_division=0
         )
 
     # aggregate metrics
+    results["micro_precision"] = sklearn.metrics.precision_score(
+        labels, preds, average="micro", zero_division=0
+    )
+    results["micro_recall"] = sklearn.metrics.recall_score(
+        labels, preds, average="micro", zero_division=0
+    )
     results["micro_f1"] = sklearn.metrics.f1_score(
-        labels, preds, average="micro"
+        labels, preds, average="micro", zero_division=0
+    )
+
+    results["macro_precision"] = sklearn.metrics.precision_score(
+        labels, preds, average="macro", zero_division=0
+    )
+    results["macro_recall"] = sklearn.metrics.recall_score(
+        labels, preds, average="macro", zero_division=0
     )
     results["macro_f1"] = sklearn.metrics.f1_score(
-        labels, preds, average="macro"
+        labels, preds, average="macro", zero_division=0
     )
 
     return results
