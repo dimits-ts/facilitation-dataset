@@ -300,15 +300,12 @@ def main(args):
         validate_percent=0.2,
     )
 
-    print("Creating train dataset...")
-    train_ds = make_dataset(train_df, tokenizer)
-    print("Creating validation dataset...")
-    val_ds = make_dataset(val_df, tokenizer)
-    print("Creating test dataset...")
-    test_ds = make_dataset(test_df, tokenizer)
-
     # ================ Training ================
     if not args.only_test:
+        print("Creating train dataset...")
+        train_ds = make_dataset(train_df, tokenizer)
+        print("Creating validation dataset...")
+        val_ds = make_dataset(val_df, tokenizer)
         print("Starting training")
         train_model(
             train_ds,
@@ -324,6 +321,8 @@ def main(args):
         print("Skipping training as per cmd argument.")
 
     # ================ Evaluation ================
+    print("Creating test dataset...")
+    test_ds = make_dataset(test_df, tokenizer)
     print("Evaluating model...")
     res_df = evaluate_model(
         model_dir=output_dir,
