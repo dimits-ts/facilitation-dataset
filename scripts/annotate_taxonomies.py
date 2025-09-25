@@ -308,16 +308,14 @@ def load_instructions(path: Path) -> str:
 
 
 def parse_response(res: str) -> bool:
-    res_ls = (
-        res.replace("`|\"|'", "").strip().lower().split()
-    )  # common llama bug
-    if "yes" in res_ls and "no" not in res_ls:
+    res = res.strip().lower()
+    if "yes" in res and "no" not in res:
         return True
-    if "no" in res_ls and "yes" not in res_ls:
+    elif "no" in res and "yes" not in res:
         return False
-
-    logger.error(f"Non-standard answer detected: {res}")
-    return False
+    else:
+        logger.error(f"Non-standard answer detected: {res}")
+        return False
 
 
 def main(args):
