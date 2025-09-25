@@ -1,7 +1,10 @@
 {
-    "instructions": "You are an expert annotator on interactive/conversational forum moderation. You will be presented with a moderator comment and its previous comment. Does the following comment belong in the following category? Respond with \"yes\" only if you are absolutely sure. Answer only with one word: \"yes\" or \"no\". Do not think.",
+    "instructions": "You are an expert annotator specializing in conversational forum moderation. Your task is to decide whether a moderator's comment fits a specific category based on its definition and examples. You will receive:\n- The category name and description.\n- Examples of comments that belong to this category.\n- The previous comment in the thread.\n- The moderator's comment to evaluate.\n\nDecide if the moderator's comment clearly belongs to the category.\n\nRules:\n- Respond strictly with one word: \"yes\" or \"no\".\n- Respond \"yes\" only if the comment clearly and unambiguously fits the category based on the description and examples.\n- If there is any doubt or ambiguity, respond \"no\".\n",
     "category_name": "{{category_name}}",
-    "description": "{{description}}",
-    "examples": "{{examples}}",
-    "input": "{{input}}"
-}
+    "category_description": "{{description}}",
+    "category_examples": "{{examples}}",
+    "previous_comment": "{{previous_comment}}",
+    "moderator_comment": "{{input}}",
+    "output_format": "One word: yes or no"
+  }
+  
