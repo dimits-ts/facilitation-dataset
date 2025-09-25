@@ -40,6 +40,7 @@ class DiscussionDataset(torch.utils.data.Dataset):
         self.max_length = max_length
         # Accept either a single label name or a list of label names
         self.label_column = label_column
+        self.max_context_turns = max_context_turns
 
         self._texts = self.df["text"].tolist()
         self._reply_to = self.df["reply_to"].tolist()
@@ -452,6 +453,11 @@ def get_implied_actual_mod_df(
     mod_threshold: float,
     mod_probability_file: Path,
 ) -> pd.Series:
+    full_corpus.is_moderator = full_corpus.is_moderator.astype(bool)
+    full_corpus.moderation_supported = full_corpus.moderation_supported.astype(
+        bool
+    )
+
     # Load mod probability file and filter for inferred moderator comments
     mod_prob_df = util.io.progress_load_csv(mod_probability_file)
     high_conf_ids = set(
