@@ -3,6 +3,5 @@
     "category_name": "{{category_name}}",
     "description": "{{description}}",
     "examples": "{{examples}}",
-    "input": "{{input}}",
-    "output": "{{output}}"
+    "input": "{{input}}"
 }
