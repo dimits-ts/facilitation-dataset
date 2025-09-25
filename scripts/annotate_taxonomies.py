@@ -14,9 +14,9 @@ import util.io
 import util.classification
 
 
-MODEL_NAME = "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"
+MODEL_NAME = "unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit"
 MAX_COMMENT_CTX = 2
-NUM_COMMENT_SAMPLE = 16_000
+NUM_COMMENT_SAMPLE = 12_000
 
 logger = logging.getLogger(__name__)
 
@@ -289,7 +289,7 @@ def comment_is_tactic(prompt: str, generator) -> bool:
             max_new_tokens=10,
         )
         # pipeline returns list with generated_text
-        res = output[0]["generated_text"][len(prompt):].strip().lower()
+        res = output[0]["generated_text"][len(prompt):]
         res = parse_response(res)
         return res
     except Exception as e:
@@ -308,15 +308,12 @@ def load_instructions(path: Path) -> str:
 
 
 def parse_response(res: str) -> bool:
-    res = res.replace("```", "")  # common llama bug
-    if res.startswith("yes"):
+    res_ls = (
+        res.replace("`|\"|'", "").strip().lower().split()
+    )  # common llama bug
+    if "yes" in res_ls and "no" not in res_ls:
         return True
-    if res.startswith("no"):
-        return False
-    # sometimes model replies like "yes." or "nope" or "no."
-    if res.startswith("y"):
-        return True
-    if res.startswith("n"):
+    if "no" in res_ls and "yes" not in res_ls:
         return False
 
     logger.error(f"Non-standard answer detected: {res}")
@@ -346,7 +343,7 @@ def main(args):
         + str(full_corpus.dataset.value_counts())
     )
 
-    mod_corpus = util.io.classification.get_implied_actual_mod_df(
+    mod_corpus = util.classification.get_implied_actual_mod_df(
         full_corpus,
         mod_threshold=args.mod_probability_thres,
         mod_probability_file=Path(args.mod_probability_file),
