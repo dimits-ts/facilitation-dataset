@@ -27,14 +27,14 @@ We use a LLaMa3.3-70b instruction-tuned model quantized to four bits. The instru
 - [Training script](../scripts/taxonomy_train.py)
 - [Inference script](../scripts/taxonomy_inference.py)
 
-In order to annotate the entire dataset with each of the 32 tactics, we train a [Modern Bert](https://huggingface.co/docs/transformers/main/model_doc/modernbert) model on the LLM-annotated data. We do not use the human annotations provided by some of the datasets. The results are then appended to the dataset.
+In order to annotate the entire dataset with each of the 32 tactics, we train a [Modern Bert](https://huggingface.co/docs/transformers/main/model_doc/modernbert) model on the LLM-annotated data. We do not use the human annotations provided by some of the datasets. The results are then appended to the dataset, on comments deemed facilitative.
 
-We use a context width of four comments, utilizing the same XML schema as in [facilitation detection](./facilitation_detection.md), with the same length restrictions.
+We use a context width of four comments, utilizing the same XML schema as in [facilitation detection](./facilitation_detection.md), with the same length restrictions. We use two previous comments as context.
 
 Our model performs exceptionally well in almost all tactics. A summary of the evaluation on the test-set can be found below.
 
 ![Transformer classification results on LLM annotated data](../graphs/taxonomy_cls_res.png)
 
-Training and inference were executed on a single Quadro RTX GPU. Training time was approximately 8 hours, and inference time 50 hours. 
+Training and inference were executed on a single Quadro RTX GPU. Training time was approximately 2 hours, and inference time 78 hours. 
 
 
