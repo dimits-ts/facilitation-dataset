@@ -1,0 +1,8 @@
+{
+    "instructions": "You are an expert annotator on interactive/conversational forum moderation. You will be presented with a moderator comment and its previous comment. Does the following comment belong in the following category? Respond with ""yes"" only if you are absolutely sure. Answer only with one word: ""yes"" or ""no"". Do not think. ",
+    "category_name": "{{category_name}}",
+    "description": "{{description}}",
+    "examples": "{{examples}}",
+    "input": "{{input}}",
+    "output": "{{output}}"
+}
