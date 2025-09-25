@@ -1,9 +1,11 @@
 import argparse
+import ast
 from pathlib import Path
 
 import pandas as pd
 import seaborn as sns
 import matplotlib.pyplot as plt
+import sklearn.metrics
 
 import util.io
 
@@ -11,7 +13,7 @@ import util.io
 MAX_LABEL_LENGTH_CHARS = 10
 
 
-def simplify_label(label: str) -> str:
+def _simplify_label(label: str) -> str:
     if len(label.split(".")) == 1 or label.startswith("Overall"):
         return label
 
@@ -28,15 +30,61 @@ def simplify_label(label: str) -> str:
     return f"{prefix}.{suffix}"
 
 
-def plot_results(df: pd.DataFrame, graphs_dir: Path) -> None:
-    df.label = df.label.replace({
-        "micro_avg": "Overall (micro)",
-        "macro_avg": "Overall (macro)"
-    })
+def calculate_llm_performance(pefk_df: pd.DataFrame, llm_df: pd.DataFrame):
+    fora_df = get_human_df(pefk_df, "fora")
+    fora_df = fora_df.drop(
+        columns=["fora.Personal story", "fora.Personal experience"]
+    )
+
+    fora_mapping = {
+        "fora.Expressing Agreement": "fora.Express affirmation",
+        "fora.Expressing Appreciation": "fora.Express appreciation",
+        "fora.Follow-Up Question": "fora.Follow up question",
+        "fora.Modeling Example Response": "fora.Provide example",
+        "fora.Making Connections": "fora.Make connections",
+        "fora.Specific Invitation to Participate": "fora.Specific invitation",
+        "fora.Open Invitation to Participate": "fora.Open invitation",
+    }
+
+    results = compute_multilabel_accuracy(
+        true_df=fora_df, pred_df=llm_df.rename(columns=fora_mapping)
+    )
+
+    print("Per-label accuracy:\n", results["per_label_accuracy"])
+    print("\nHamming accuracy:", results["hamming_accuracy"])
+    print("\nClassification report:\n", results["classification_report"])
+
+    whow_df = pefk_df[pefk_df.dataset == "whow"]
+    whow_df = get_human_df(whow_df[whow_df.is_moderator == 1], "whow")
+    whow_mapping = {
+        "whow.Instruction": "whow.instruction",
+        "whow.Interpretation": "whow.interpretation",
+        "whow.Informational Motive": "whow.informational_motive",
+        "whow.Confronting": "whow.confronting",
+        "whow.Social Motive": "whow.social_motive",
+        "whow.Utility": "whow.utility",
+        "whow.Supplement": "whow.supplement",
+        "whow.Coordinative Motive": "whow.coordinative_motive",
+        "whow.Probing": "whow.probing",
+    }
+
+    results = compute_multilabel_accuracy(
+        true_df=whow_df, pred_df=llm_df.rename(columns=whow_mapping)
+    )
+
+    print("Per-label accuracy:\n", results["per_label_accuracy"])
+    print("\nHamming accuracy:", results["hamming_accuracy"])
+    print("\nClassification report:\n", results["classification_report"])
+
+
+def plot_classifier_results(df: pd.DataFrame, graphs_dir: Path) -> None:
+    df.label = df.label.replace(
+        {"micro_avg": "Overall (micro)", "macro_avg": "Overall (macro)"}
+    )
 
     # group tactics by taxonomy
     df["prefix"] = df.label.str.split(".").str[0]
-    df.label = df.label.apply(simplify_label)
+    df.label = df.label.apply(_simplify_label)
     df_sorted = df.sort_values(["prefix", "label"]).set_index("label")
 
     df_heatmap = df_sorted.drop(columns="prefix")
@@ -62,17 +110,122 @@ def plot_results(df: pd.DataFrame, graphs_dir: Path) -> None:
     util.io.save_plot(graphs_dir / "taxonomy_cls_res.png")
 
 
+def get_llm_annotations(label_dir: Path):
+    dfs = []
+    for file in label_dir.iterdir():
+        col_name = file.stem
+        df = pd.read_csv(file)
+        df = df.rename(columns={"is_match": col_name})
+        dfs.append(df[col_name])
+    dfs.insert(0, df.message_id)
+
+    full_df = pd.concat(dfs, axis=1)
+    return full_df
+
+
+def compute_multilabel_accuracy(true_df: pd.DataFrame, pred_df: pd.DataFrame):
+    """
+    Compute per-label accuracy, overall Hamming accuracy,
+    and a classification report for multilabel classification.
+    Handles mismatched row order and extra columns in pred_df.
+
+    Args:
+        true_df (pd.DataFrame): Ground-truth labels.
+            Must include 'message_id' and label columns.
+        pred_df (pd.DataFrame): Predicted labels.
+            Must include 'message_id' and label columns.
+
+    Returns:
+        dict: {
+            "per_label_accuracy": pd.Series,
+            "hamming_accuracy": float,
+            "classification_report": pd.DataFrame
+        }
+    """
+
+    # Merge on message_id to align rows
+    merged = true_df.merge(
+        pred_df, on="message_id", suffixes=("_true", "_pred")
+    )
+
+    # Identify label columns (exclude message_id)
+    true_cols = [c for c in true_df.columns if c != "message_id"]
+    pred_cols = [c for c in pred_df.columns if c != "message_id"]
+
+    # Use only common labels
+    common_labels = [c for c in true_cols if c in pred_cols]
+    if not common_labels:
+        raise ValueError(
+            "No common label columns found between true_df and pred_df."
+        )
+
+    # Compute per-label accuracy
+    per_label_acc = {
+        col: sklearn.metrics.accuracy_score(
+            merged[f"{col}_true"], merged[f"{col}_pred"]
+        )
+        for col in common_labels
+    }
+    per_label_acc = pd.Series(per_label_acc)
+
+    # Prepare arrays for metrics
+    Y_true = merged[[f"{col}_true" for col in common_labels]].values
+    Y_pred = merged[[f"{col}_pred" for col in common_labels]].values
+
+    # Hamming accuracy
+    hamming_accuracy = 1 - sklearn.metrics.hamming_loss(Y_true, Y_pred)
+
+    # Classification report (output as DataFrame)
+    clf_report = sklearn.metrics.classification_report(
+        Y_true,
+        Y_pred,
+        target_names=common_labels,
+        zero_division=0,
+        output_dict=True,
+    )
+    clf_report = pd.DataFrame(clf_report).T
+
+    return {
+        "per_label_accuracy": per_label_acc,
+        "hamming_accuracy": hamming_accuracy,
+        "classification_report": clf_report,
+    }
+
+
+def get_human_df(pefk_df: pd.DataFrame, dataset_name: str) -> pd.DataFrame:
+    df = pefk_df[pefk_df.dataset == dataset_name].copy()
+    df = df[df.notes.str.strip().str.len() > 0]
+    notes = df.notes.apply(ast.literal_eval)
+    notes = notes.apply(pd.Series)
+    notes = notes.add_prefix(f"{dataset_name}.")
+    df = df[["message_id"]].join(notes)
+
+    return df
+
+
 def main(args):
     res_csv_path = Path(args.res_csv_path)
+    label_dir = Path(args.label_dir)
     graphs_dir = Path(args.graphs_dir)
+    dataset_path = Path(args.dataset_path)
 
     if not res_csv_path.is_file():
         raise OSError(f"Error: {res_csv_path} is not a file.") from None
     if not graphs_dir.is_dir():
         raise OSError(f"{graphs_dir} is not a directory.") from None
+    if not dataset_path.is_file():
+        raise OSError(f"Error: {dataset_path} is not a file.") from None
+    if not label_dir.is_dir():
+        raise OSError(f"{label_dir} is not a directory.") from None
 
+    print("Running human -> LLM evaluation...")
+    pefk_df = util.io.progress_load_csv(dataset_path)
+    llm_df = get_llm_annotations(label_dir)
+    calculate_llm_performance(pefk_df, llm_df)
+
+    print("Running classifier -> LLM evaluation...")
     res_df = pd.read_csv(res_csv_path, index_col=0)
-    plot_results(df=res_df, graphs_dir=graphs_dir)
+    plot_classifier_results(df=res_df, graphs_dir=graphs_dir)
 
 
 if __name__ == "__main__":
@@ -90,5 +243,17 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Directory where the graphs will be exported to",
+    )
+    parser.add_argument(
+        "--label_dir",
+        type=str,
+        required=True,
+        help="Directory where the LLM annotation csv files reside",
+    )
+    parser.add_argument(
+        "--dataset_path",
+        type=str,
+        required=True,
+        help="The path to the base PEFK dataset",
     )
     main(args=parser.parse_args())
