@@ -11,7 +11,7 @@ import util.io
 MAX_LENGTH = 8192  # same as training
 MODEL = "answerdotai/ModernBERT-base"  # same as training
 CTX_LENGTH_COMMENTS = 2
-BATCH_SIZE = 64
+BATCH_SIZE = 72
 
 
 def collate_fn(tokenizer, batch, max_length):
@@ -52,21 +52,21 @@ def run_inference(
     # ── Load dataset ─────────────────────────────────────────
     df = util.io.progress_load_csv(dataset_path)
     df = util.classification.preprocess_dataset(df)
-    mod_df = util.io.classification.get_implied_actual_mod_df(
+    mod_df = util.classification.get_implied_actual_mod_df(
         full_corpus=df,
         mod_threshold=mod_probability_thres,
         mod_probability_file=mod_probability_path,
     )
 
-    if "text" not in df.columns or "message_id" not in df.columns:
+    if "text" not in mod_df.columns or "message_id" not in mod_df.columns:
         raise ValueError(
             "Dataset must contain 'message_id' and 'text' columns."
         )
 
     # ── Merge label placeholders (so dataset works with DiscussionDataset) ──
     for label_name in label_names:
-        if label_name not in df.columns:
-            df[label_name] = 0  # dummy label for inference
+        if label_name not in mod_df.columns:
+            mod_df[label_name] = 0  # dummy label for inference
 
     # ── Prepare DiscussionDataset ───────────────────────────
     print("Creating dataset...")
