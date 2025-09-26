@@ -14,9 +14,9 @@ import util.io
 import util.classification
 
 
-MODEL_NAME = "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"
+MODEL_NAME = "unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit"
 MAX_COMMENT_CTX = 2
-NUM_COMMENT_SAMPLE = 10_000
+NUM_COMMENT_SAMPLE = 8000
 
 logger = logging.getLogger(__name__)
 
@@ -271,7 +271,7 @@ def process_tactic(
             input_str=input_str,
         )
         if first_print:
-            logger.info("Prompt used: " + prompt)
+            logger.info(f"Prompt used: {prompt}")
             first_print = False
 
         is_match = comment_is_tactic(
@@ -314,9 +314,9 @@ def comment_is_tactic(
         # Most Llama chat templates end with something like
         # "<|start_header_id|>assistant<|end_header_id|>\n"
         # So we find that marker and take what's after it
-        if "<|start_header_id|>assistant" in generated_text:
+        if "assistant" in generated_text:
             assistant_reply = generated_text.split(
-                "<|start_header_id|>assistant<|end_header_id|>"
+                "assistant"
             )[-1].strip()
         else:
             # fallback: take text after user message
