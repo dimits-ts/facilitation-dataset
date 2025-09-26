@@ -14,9 +14,9 @@ import util.io
 import util.classification
 
 
-MODEL_NAME = "unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit"
+MODEL_NAME = "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"
 MAX_COMMENT_CTX = 2
-NUM_COMMENT_SAMPLE = 12_000
+NUM_COMMENT_SAMPLE = 10_000
 
 logger = logging.getLogger(__name__)
 
@@ -99,19 +99,22 @@ def create_prompt_from_input(
     description: str,
     examples: list[str],
     input_str: str,
-) -> str:
+) -> dict:
     """
-    Fill the instruction/template file by replacing:
-      - {{category_name}}, {{description}}, {{examples}}, {{input}}
-    Examples are joined with newlines and prefixed with '- '.
+    Fill the instruction/template file and return a dict with system and
+    user messages.
     """
+    template = yaml.safe_load(instructions)  # or json.load if it's a .json
     examples_formatted = "\n".join(f"- {ex.strip()}" for ex in examples)
-    prompt = instructions
-    prompt = prompt.replace("{{category_name}}", category_name)
-    prompt = prompt.replace("{{description}}", description.strip())
-    prompt = prompt.replace("{{examples}}", examples_formatted)
-    prompt = prompt.replace("{{input}}", input_str.strip())
-    return prompt
+    system_prompt = template["system"]
+    user_prompt = (
+        template["user"]
+        .replace("{{category_name}}", category_name)
+        .replace("{{description}}", description.strip())
+        .replace("{{examples}}", examples_formatted)
+        .replace("{{input}}", input_str.strip())
+    )
+    return {"system": system_prompt, "user": user_prompt}
 
 
 def build_comment_lookup(df: pd.DataFrame) -> dict:
@@ -174,6 +177,7 @@ def process_all_taxonomies(
     instructions: str,
     output_dir: Path,
     generator,
+    tokenizer,
 ) -> None:
     for tax_name, taxonomy in tqdm(taxonomies.items(), desc="Taxonomies"):
         process_single_taxonomy(
@@ -184,6 +188,7 @@ def process_all_taxonomies(
             instructions=instructions,
             output_dir=output_dir,
             generator=generator,
+            tokenizer=tokenizer,
         )
 
 
@@ -195,6 +200,7 @@ def process_single_taxonomy(
     instructions: str,
     output_dir: Path,
     generator,
+    tokenizer,
 ) -> None:
     for tactic_name, tactic in tqdm(
         taxonomy.items(), desc=f"Taxonomy: {tax_name}"
@@ -209,6 +215,7 @@ def process_single_taxonomy(
             instructions=instructions,
             output_dir=output_dir,
             generator=generator,
+            tokenizer=tokenizer,
         )
 
 
@@ -221,6 +228,7 @@ def process_tactic(
     instructions: str,
     output_dir: Path,
     generator,
+    tokenizer,
 ) -> None:
     first_print = True
     logger.info("Processing tactic " + tactic_name)
@@ -266,7 +274,9 @@ def process_tactic(
             logger.info("Prompt used: " + prompt)
             first_print = False
 
-        is_match = comment_is_tactic(prompt=prompt, generator=generator)
+        is_match = comment_is_tactic(
+            prompt=prompt, generator=generator, tokenizer=tokenizer
+        )
         results.append({"message_id": message_id, "is_match": is_match})
 
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -277,21 +287,43 @@ def process_tactic(
     )
 
 
-def comment_is_tactic(prompt: str, generator) -> bool:
+def comment_is_tactic(
+    prompt: dict, generator, tokenizer: transformers.PreTrainedTokenizerBase
+) -> bool:
     """
-    Uses the transformers pipeline to ask the model.
-    Expects the model to answer with 'yes' or 'no'.
-    Parses the first clear yes/no.
+    Uses the transformers chat template to query the model with a
+    system prompt.
     """
     try:
-        output = generator(
-            prompt,
-            max_new_tokens=10,
+        messages = [
+            {"role": "system", "content": prompt["system"]},
+            {"role": "user", "content": prompt["user"]},
+        ]
+        chat_text = tokenizer.apply_chat_template(
+            messages, tokenize=False, add_generation_prompt=True
         )
-        # pipeline returns list with generated_text
-        res = output[0]["generated_text"][len(prompt):]
-        res = parse_response(res)
-        return res
+        encoded_input = tokenizer(chat_text, return_tensors="pt").to(
+            generator.model.device
+        )
+
+        output = generator.model.generate(
+            **encoded_input, max_new_tokens=10, do_sample=False
+        )
+        generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
+        # Extract the assistant reply (after the generation prompt)
+        # Most Llama chat templates end with something like
+        # "<|start_header_id|>assistant<|end_header_id|>\n"
+        # So we find that marker and take what's after it
+        if "<|start_header_id|>assistant" in generated_text:
+            assistant_reply = generated_text.split(
+                "<|start_header_id|>assistant<|end_header_id|>"
+            )[-1].strip()
+        else:
+            # fallback: take text after user message
+            assistant_reply = generated_text.split(prompt["user"])[-1].strip()
+
+        return parse_response(assistant_reply)
+
     except Exception as e:
         logger.exception("Error during model inference: %s", e)
         return False
@@ -370,6 +402,7 @@ def main(args):
             instructions=instructions,
             output_dir=output_dir,
             generator=generator,
+            tokenizer=tokenizer,
         )
     except Exception as e:
         logger.critical("Critical error encountered. Exiting... %s", e)
