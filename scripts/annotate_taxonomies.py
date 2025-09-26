@@ -7,6 +7,7 @@ from pathlib import Path
 
 import transformers
 import pandas as pd
+import numpy as np
 import coloredlogs
 from tqdm.auto import tqdm
 
@@ -206,17 +207,27 @@ def process_single_taxonomy(
         taxonomy.items(), desc=f"Taxonomy: {tax_name}"
     ):
         logger.info("Processing taxonomy " + tax_name)
-        process_tactic(
+        res_df = process_tactic(
             tax_name=tax_name,
             tactic_name=tactic_name,
             tactic=tactic,
             full_corpus=full_corpus,
             classifiable_ids=classifiable_ids,
             instructions=instructions,
-            output_dir=output_dir,
             generator=generator,
             tokenizer=tokenizer,
         )
+
+        num_pos = np.count_nonzero(res_df.is_match)
+        logger.info(
+            f"Tactic {tactic_name} Positives: {num_pos} "
+            f"Negatives: {len(res_df) - num_pos}"
+        )
+
+        output_dir.mkdir(parents=True, exist_ok=True)
+        out_file = output_dir / f"{tax_name.strip()}.{tactic_name.strip()}.csv"
+        logger.info(f"Saving results to file {out_file}")
+        res_df.to_csv(out_file, index=False)
 
 
 def process_tactic(
@@ -226,10 +237,9 @@ def process_tactic(
     full_corpus: pd.DataFrame,
     classifiable_ids: pd.Series,
     instructions: str,
-    output_dir: Path,
     generator,
     tokenizer,
-) -> None:
+) -> pd.DataFrame:
     first_print = True
     logger.info("Processing tactic " + tactic_name)
     logger.info("Building data")
@@ -279,12 +289,8 @@ def process_tactic(
         )
         results.append({"message_id": message_id, "is_match": is_match})
 
-    output_dir.mkdir(parents=True, exist_ok=True)
-    out_file = output_dir / f"{tax_name.strip()}.{tactic_name.strip()}.csv"
-    logger.info("Saving results to file " + str(out_file))
-    pd.DataFrame(results, columns=["message_id", "is_match"]).to_csv(
-        out_file, index=False
-    )
+    res_df = pd.DataFrame(results, columns=["message_id", "is_match"])
+    return res_df
 
 
 def comment_is_tactic(
@@ -315,9 +321,7 @@ def comment_is_tactic(
         # "<|start_header_id|>assistant<|end_header_id|>\n"
         # So we find that marker and take what's after it
         if "assistant" in generated_text:
-            assistant_reply = generated_text.split(
-                "assistant"
-            )[-1].strip()
+            assistant_reply = generated_text.split("assistant")[-1].strip()
         else:
             # fallback: take text after user message
             assistant_reply = generated_text.split(prompt["user"])[-1].strip()
