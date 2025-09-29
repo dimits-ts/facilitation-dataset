@@ -53,7 +53,7 @@ def calculate_llm_performance(
         true_df=fora_df, pred_df=llm_df.rename(columns=fora_mapping)
     )
 
-    print("Per-label accuracy:\n", results["per_label_accuracy"])
+    print("Per-label stats:\n", results["per_label_stats"])
     print("\nHamming accuracy:", results["hamming_accuracy"])
     plot_multilabel_confusion_matrix(
         cm=results["confusion_matrix"],
@@ -80,7 +80,7 @@ def calculate_llm_performance(
         true_df=whow_df, pred_df=llm_df.rename(columns=whow_mapping)
     )
 
-    print("Per-label accuracy:\n", results["per_label_accuracy"])
+    print("Per-label stats:\n", results["per_label_stats"])
     print("\nHamming accuracy:", results["hamming_accuracy"])
     plot_multilabel_confusion_matrix(
         cm=results["confusion_matrix"],
@@ -149,9 +149,10 @@ def compute_multilabel_accuracy(true_df: pd.DataFrame, pred_df: pd.DataFrame):
 
     Returns:
         dict: {
-            "per_label_accuracy": pd.Series,
+            "per_label_stats: pd.DataFrame,
             "hamming_accuracy": float,
-            "confusion_matrix": pd.DataFrame
+            "confusion_matrix": pd.DataFrame,
+            "labels": list[str]
         }
     """
 
@@ -171,26 +172,38 @@ def compute_multilabel_accuracy(true_df: pd.DataFrame, pred_df: pd.DataFrame):
             "No common label columns found between true_df and pred_df."
         )
 
-    # Compute per-label accuracy
-    per_label_acc = {
-        col: sklearn.metrics.accuracy_score(
-            merged[f"{col}_true"], merged[f"{col}_pred"]
-        )
-        for col in common_labels
-    }
-    per_label_acc = pd.Series(per_label_acc)
+    per_label_stats = {}
+    for col in common_labels:
+        y_true_col = merged[f"{col}_true"]
+        y_pred_col = merged[f"{col}_pred"]
 
-    # Prepare arrays for metrics
+        precision, recall, f1, support = (
+            sklearn.metrics.precision_recall_fscore_support(
+                y_true_col,
+                y_pred_col,
+                average="binary",  # ✅ for per-label binary classification
+                zero_division=0,
+            )
+        )
+
+        per_label_stats[col] = {
+            "accuracy": sklearn.metrics.accuracy_score(y_true_col, y_pred_col),
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
+            "support": support,
+        }
+    per_label_stats = pd.DataFrame(per_label_stats).T
+
+    # flatten results for hamming accuracy
     Y_true = merged[[f"{col}_true" for col in common_labels]].values
     Y_pred = merged[[f"{col}_pred" for col in common_labels]].values
-
-    # Hamming accuracy
     hamming_accuracy = 1 - sklearn.metrics.hamming_loss(Y_true, Y_pred)
 
     conf_matrix = sklearn.metrics.multilabel_confusion_matrix(Y_true, Y_pred)
 
     return {
-        "per_label_accuracy": per_label_acc,
+        "per_label_stats": per_label_stats,
         "hamming_accuracy": hamming_accuracy,
         "confusion_matrix": conf_matrix,
         "labels": common_labels,
@@ -274,7 +287,7 @@ def main(args):
     llm_df = get_llm_annotations(label_dir)
     calculate_llm_performance(pefk_df, llm_df, graphs_dir)
 
-    print("Running classifier -> LLM evaluation...")
+    print("Running LLM -> Transformer evaluation...")
     res_df = pd.read_csv(res_csv_path, index_col=0)
     plot_classifier_results(df=res_df, graphs_dir=graphs_dir)
 
