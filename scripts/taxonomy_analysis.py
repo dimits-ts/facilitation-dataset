@@ -172,34 +172,42 @@ def compute_multilabel_accuracy(true_df: pd.DataFrame, pred_df: pd.DataFrame):
             "No common label columns found between true_df and pred_df."
         )
 
+    # Compute per-label stats
     per_label_stats = {}
     for col in common_labels:
         y_true_col = merged[f"{col}_true"]
         y_pred_col = merged[f"{col}_pred"]
 
+        # Basic metrics
         precision, recall, f1, support = (
             sklearn.metrics.precision_recall_fscore_support(
-                y_true_col,
-                y_pred_col,
-                average="binary",  # per-label binary classification
-                zero_division="warn",
+                y_true_col, y_pred_col, average="binary", zero_division=0
             )
         )
+        accuracy = sklearn.metrics.accuracy_score(y_true_col, y_pred_col)
+
+        # Annotator agreement metrics
+        cohen_kappa = sklearn.metrics.cohen_kappa_score(y_true_col, y_pred_col)
+        mcc = sklearn.metrics.matthews_corrcoef(y_true_col, y_pred_col)
 
         per_label_stats[col] = {
-            "accuracy": sklearn.metrics.accuracy_score(y_true_col, y_pred_col),
+            "accuracy": accuracy,
             "precision": precision,
             "recall": recall,
             "f1": f1,
-            "support": y_true_col.sum(),  # sklearn returns NaN in multilabel
+            "cohen_kappa": cohen_kappa,
+            "mcc": mcc,
+            "support": y_true_col.sum(),
         }
+
     per_label_stats = pd.DataFrame(per_label_stats).T
 
-    # flatten results for hamming accuracy
+    # Flatten results for Hamming accuracy
     Y_true = merged[[f"{col}_true" for col in common_labels]].values
     Y_pred = merged[[f"{col}_pred" for col in common_labels]].values
     hamming_accuracy = 1 - sklearn.metrics.hamming_loss(Y_true, Y_pred)
 
+    # Multilabel confusion matrix
     conf_matrix = sklearn.metrics.multilabel_confusion_matrix(Y_true, Y_pred)
 
     return {
