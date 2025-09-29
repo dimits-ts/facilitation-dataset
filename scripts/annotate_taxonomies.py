@@ -243,7 +243,7 @@ def process_all_taxonomies(
     classifiable_ids: pd.Series,
     instructions: str,
     output_dir: Path,
-    generator,
+    model,
     tokenizer,
 ) -> None:
     df_lookup = build_comment_lookup(full_corpus)
@@ -256,7 +256,7 @@ def process_all_taxonomies(
             classifiable_ids=classifiable_ids,
             instructions=instructions,
             output_dir=output_dir,
-            generator=generator,
+            model=model,
             tokenizer=tokenizer,
             df_lookup=df_lookup,
         )
@@ -270,7 +270,7 @@ def process_single_taxonomy(
     instructions: str,
     df_lookup: dict,
     output_dir: Path,
-    generator,
+    model,
     tokenizer,
 ) -> None:
     for tactic_name, tactic in tqdm(
@@ -284,7 +284,7 @@ def process_single_taxonomy(
             full_corpus=full_corpus,
             classifiable_ids=classifiable_ids,
             instructions=instructions,
-            generator=generator,
+            model=model,
             tokenizer=tokenizer,
             df_lookup=df_lookup,
         )
@@ -309,7 +309,7 @@ def process_tactic(
     classifiable_ids: pd.Series,
     df_lookup: dict,
     instructions: str,
-    generator,
+    model,
     tokenizer,
 ) -> pd.DataFrame:
     logger.info(f"Processing tactic {tactic_name}")
@@ -344,14 +344,14 @@ def process_tactic(
         loader, total=len(dataset), desc=f"Tactic: {tactic_name}", leave=False
     ):
         encoded = {
-            k: v.squeeze(0).to(generator.model.device)
+            k: v.squeeze(0).to(model.device)
             for k, v in batch["encoded"].items()
         }
         prompt_user = batch["prompt_user"][0]
         message_id = batch["message_id"][0]
 
         with torch.inference_mode():
-            output = generator.model.generate(
+            output = model.generate(
                 **encoded, max_new_tokens=10, do_sample=False
             )
 
@@ -372,11 +372,11 @@ def process_tactic(
 
 
 def comment_is_tactic(
-    encoded_input, prompt_user: str, tokenizer, generator
+    encoded_input, prompt_user: str, tokenizer, model
 ) -> bool:
     try:
         with torch.inference_mode():
-            output = generator.model.generate(
+            output = model.generate(
                 **encoded_input, max_new_tokens=10, do_sample=False
             )
         generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
@@ -460,10 +460,6 @@ def main(args):
     # do NOT chain these
     model = torch.compile(model, mode="max-autotune", fullgraph=True)
 
-    generator = transformers.TextGenerationPipeline(
-        model=model, tokenizer=tokenizer
-    )
-
     try:
         process_all_taxonomies(
             taxonomy_dict,
@@ -471,7 +467,7 @@ def main(args):
             classifiable_ids=classifiable_ids,
             instructions=instructions,
             output_dir=output_dir,
-            generator=generator,
+            model=model,
             tokenizer=tokenizer,
         )
     except Exception as e:
