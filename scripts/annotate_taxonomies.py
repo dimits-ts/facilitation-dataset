@@ -5,6 +5,7 @@ import yaml
 import sys
 from pathlib import Path
 
+import torch
 import transformers
 import pandas as pd
 import numpy as np
@@ -192,7 +193,7 @@ def process_all_taxonomies(
             output_dir=output_dir,
             generator=generator,
             tokenizer=tokenizer,
-            df_lookup=df_lookup
+            df_lookup=df_lookup,
         )
 
 
@@ -220,7 +221,7 @@ def process_single_taxonomy(
             instructions=instructions,
             generator=generator,
             tokenizer=tokenizer,
-            df_lookup=df_lookup
+            df_lookup=df_lookup,
         )
 
         num_pos = np.count_nonzero(res_df.is_match)
@@ -315,9 +316,11 @@ def comment_is_tactic(
             generator.model.device
         )
 
-        output = generator.model.generate(
-            **encoded_input, max_new_tokens=10, do_sample=False
-        )
+        # small gains maybe??
+        with torch.inference_mode():
+            output = generator.model.generate(
+                **encoded_input, max_new_tokens=10, do_sample=False
+            )
         generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
         # Extract the assistant reply (after the generation prompt)
         # Most Llama chat templates end with something like
