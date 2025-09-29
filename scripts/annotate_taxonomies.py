@@ -17,7 +17,7 @@ import util.classification
 
 MODEL_NAME = "unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit"
 MAX_COMMENT_CTX = 2
-NUM_COMMENT_SAMPLE = 8000
+NUM_COMMENT_SAMPLE = 16000
 
 logger = logging.getLogger(__name__)
 
@@ -180,6 +180,8 @@ def process_all_taxonomies(
     generator,
     tokenizer,
 ) -> None:
+    df_lookup = build_comment_lookup(full_corpus)
+
     for tax_name, taxonomy in tqdm(taxonomies.items(), desc="Taxonomies"):
         process_single_taxonomy(
             tax_name=tax_name,
@@ -190,6 +192,7 @@ def process_all_taxonomies(
             output_dir=output_dir,
             generator=generator,
             tokenizer=tokenizer,
+            df_lookup=df_lookup
         )
 
 
@@ -199,6 +202,7 @@ def process_single_taxonomy(
     full_corpus: pd.DataFrame,
     classifiable_ids: pd.Series,
     instructions: str,
+    df_lookup: dict,
     output_dir: Path,
     generator,
     tokenizer,
@@ -216,6 +220,7 @@ def process_single_taxonomy(
             instructions=instructions,
             generator=generator,
             tokenizer=tokenizer,
+            df_lookup=df_lookup
         )
 
         num_pos = np.count_nonzero(res_df.is_match)
@@ -236,6 +241,7 @@ def process_tactic(
     tactic: dict,
     full_corpus: pd.DataFrame,
     classifiable_ids: pd.Series,
+    df_lookup: dict,
     instructions: str,
     generator,
     tokenizer,
@@ -245,9 +251,6 @@ def process_tactic(
     logger.info("Building data")
     description = tactic.get("description")
     examples = tactic.get("examples")
-
-    # Build lookup from full corpus so context chain is intact
-    lookup = build_comment_lookup(full_corpus)
 
     # Filter the rows of full_corpus to only those we should classify
     to_classify = full_corpus[
@@ -264,7 +267,7 @@ def process_tactic(
     ):
         message_id = row.get("message_id")
         context_comments = fetch_context_chain_comments(
-            row.to_dict(), lookup, MAX_COMMENT_CTX
+            row.to_dict(), df_lookup, MAX_COMMENT_CTX
         )
         user = row.get("user", "unknown")
         comment_text = row.get("text")
