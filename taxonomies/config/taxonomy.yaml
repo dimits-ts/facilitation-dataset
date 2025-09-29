@@ -143,3 +143,55 @@ fora:
       - "That’s similar to what Jamie shared earlier, right?"
       - "I have a similar experience that resonates."
       - "That connects to what we were discussing earlier."
+
+park_et_al_2012:
+  Welcoming:
+      description: >
+        Social function involving encouragement, appreciation of contributions, and welcoming tone.
+      examples:
+        - "Thank you for participating!"
+        - "We appreciate your comment."
+        - "Welcome to the discussion—glad to have you here."
+
+  Resolving Site Use Issues:
+    description: >
+      Address technical difficulties and provide clarity on the goals, rules, or structure of the platform or moderation.
+    examples:
+      - "If you're having trouble logging in, try resetting your password."
+      - "This forum is moderated by CeRI to ensure thoughtful engagement."
+      - "Please remember, the aim here is to gather feedback on the proposed rule."
+
+  Organizing Discussion:
+    description: >
+      Direct users to issue posts or threads more aligned with their expressed interest or comment topic.
+    examples:
+      - "It sounds like your concern is more relevant to [Topic X]—please consider posting it there."
+
+  Policing:
+    description: >
+      Intervene to maintain civility and enforce community standards, including moderating inappropriate content.
+    examples:
+      - "This comment has been redacted due to inappropriate language."
+      - "Please maintain respectful discourse in this space."
+
+  Keeping Discussion on Target:
+    description: >
+      Refocus the discussion by identifying off-topic comments or explaining relevance to agency scope.
+    examples:
+      - "This issue falls outside the agency's current rulemaking authority."
+      - "This comment is not related to the topic under discussion."
+
+  Improving Comment Quality:
+    description: >
+      Help users strengthen their contributions by providing context, correcting misstatements, and encouraging evidence-based input.
+    examples:
+      - "The rule applies only to urban zones, not rural areas."
+      - "Please provide supporting data or examples for your claim."
+      - "Consider suggesting a possible alternative or solution."
+
+  Broadening Discussion:
+    description: >
+      Expand user perspectives by promoting engagement with others and encouraging community-wide dialogue.
+    examples:
+      - "What do others think about this proposal?"
+      - "You might consider responding to Jane's point above—she raises a similar concern."
