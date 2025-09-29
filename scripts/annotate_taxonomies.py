@@ -6,6 +6,7 @@ import sys
 from pathlib import Path
 
 import torch
+import torch.utils.data
 import transformers
 import pandas as pd
 import numpy as np
@@ -19,6 +20,7 @@ import util.classification
 MODEL_NAME = "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"
 MAX_COMMENT_CTX = 3
 NUM_COMMENT_SAMPLE = 4000
+NUM_DATLOADER_WORKERS = 4
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,69 @@ class ContextualizedComment(Comment):
         ctx_strs = [f"{c.user}: {c.comment}" for c in self.context]
         context = f"Preceding comments: {ctx_strs}"
         return f"{context}\nComment to be classified:\n{super().__str__()}"
+
+
+class PromptDataset(torch.utils.data.Dataset):
+    def __init__(
+        self,
+        df,
+        df_lookup,
+        instructions,
+        tactic_name,
+        description,
+        examples,
+        tokenizer,
+    ):
+        self.df = df
+        self.df_lookup = df_lookup
+        self.instructions = instructions
+        self.tactic_name = tactic_name
+        self.description = description
+        self.examples = examples
+        self.tokenizer = tokenizer
+
+    def __len__(self):
+        return len(self.df)
+
+    def __getitem__(self, idx):
+        row = self.df.iloc[idx]
+        message_id = row["message_id"]
+
+        # Build context + comment object
+        context_comments = fetch_context_chain_comments(
+            row.to_dict(), self.df_lookup, MAX_COMMENT_CTX
+        )
+        comment_obj = ContextualizedComment(
+            comment=row["text"],
+            user=row.get("user", "unknown"),
+            context=context_comments,
+        )
+
+        # Create prompt
+        prompt = create_prompt_from_input(
+            instructions=self.instructions,
+            category_name=self.tactic_name,
+            description=self.description,
+            examples=self.examples,
+            input_str=str(comment_obj),
+        )
+
+        # Apply chat template and tokenize
+        chat_text = self.tokenizer.apply_chat_template(
+            [
+                {"role": "system", "content": prompt["system"]},
+                {"role": "user", "content": prompt["user"]},
+            ],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+
+        encoded = self.tokenizer(chat_text, return_tensors="pt")
+        return {
+            "message_id": message_id,
+            "encoded": encoded,
+            "prompt_user": prompt["user"],
+        }
 
 
 def setup_logging(logs_dir: Path):
@@ -247,90 +312,80 @@ def process_tactic(
     generator,
     tokenizer,
 ) -> pd.DataFrame:
-    first_print = True
-    logger.info("Processing tactic " + tactic_name)
-    logger.info("Building data")
-    description = tactic.get("description")
-    examples = tactic.get("examples")
+    logger.info(f"Processing tactic {tactic_name}")
 
-    # Filter the rows of full_corpus to only those we should classify
+    # Filter and prepare subset
     to_classify = full_corpus[
         full_corpus["message_id"].astype(str).isin(classifiable_ids)
-    ]
+    ].reset_index(drop=True)
 
-    logger.info("Starting inference")
+    dataset = PromptDataset(
+        df=to_classify,
+        df_lookup=df_lookup,
+        instructions=instructions,
+        tactic_name=tactic_name,
+        description=tactic.get("description"),
+        examples=tactic.get("examples"),
+        tokenizer=tokenizer,
+    )
+
+    # Use num_workers > 0 to parallelize CPU prompt preparation
+    loader = torch.util.data.DataLoader(
+        dataset,
+        batch_size=1,
+        shuffle=False,
+        num_workers=NUM_DATLOADER_WORKERS,
+        prefetch_factor=4,
+    )
+
     results = []
-    for _, row in tqdm(
-        to_classify.iterrows(),
-        total=len(to_classify),
-        leave=False,
-        desc=f"Tactic: {tactic_name}",
+    logger.info("Starting inference loop...")
+    for batch in tqdm(
+        loader, total=len(dataset), desc=f"Tactic: {tactic_name}", leave=False
     ):
-        message_id = row.get("message_id")
-        context_comments = fetch_context_chain_comments(
-            row.to_dict(), df_lookup, MAX_COMMENT_CTX
-        )
-        user = row.get("user", "unknown")
-        comment_text = row.get("text")
-        classifiable = ContextualizedComment(
-            comment=comment_text, user=user, context=context_comments
+        encoded = {
+            k: v.squeeze(0).to(generator.model.device)
+            for k, v in batch["encoded"].items()
+        }
+        prompt_user = batch["prompt_user"][0]
+        message_id = batch["message_id"][0]
+
+        with torch.inference_mode():
+            output = generator.model.generate(
+                **encoded, max_new_tokens=10, do_sample=False
+            )
+
+        generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
+        if "assistant" in generated_text:
+            assistant_reply = generated_text.split("assistant")[-1].strip()
+        else:
+            assistant_reply = generated_text.split(prompt_user)[-1].strip()
+
+        results.append(
+            {
+                "message_id": message_id,
+                "is_match": parse_response(assistant_reply),
+            }
         )
 
-        input_str = str(classifiable)
-        prompt = create_prompt_from_input(
-            instructions=instructions,
-            category_name=tactic_name,
-            description=description,
-            examples=examples,
-            input_str=input_str,
-        )
-        if first_print:
-            logger.info(f"Prompt used: {prompt}")
-            first_print = False
-
-        is_match = comment_is_tactic(
-            prompt=prompt, generator=generator, tokenizer=tokenizer
-        )
-        results.append({"message_id": message_id, "is_match": is_match})
-
-    res_df = pd.DataFrame(results, columns=["message_id", "is_match"])
-    return res_df
+    return pd.DataFrame(results)
 
 
 def comment_is_tactic(
-    prompt: dict, generator, tokenizer: transformers.PreTrainedTokenizerBase
+    encoded_input, prompt_user: str, tokenizer, generator
 ) -> bool:
-    """
-    Uses the transformers chat template to query the model with a
-    system prompt.
-    """
     try:
-        messages = [
-            {"role": "system", "content": prompt["system"]},
-            {"role": "user", "content": prompt["user"]},
-        ]
-        chat_text = tokenizer.apply_chat_template(
-            messages, tokenize=False, add_generation_prompt=True
-        )
-        encoded_input = tokenizer(chat_text, return_tensors="pt").to(
-            generator.model.device
-        )
-
-        # small gains maybe??
         with torch.inference_mode():
             output = generator.model.generate(
                 **encoded_input, max_new_tokens=10, do_sample=False
             )
         generated_text = tokenizer.decode(output[0], skip_special_tokens=True)
-        # Extract the assistant reply (after the generation prompt)
-        # Most Llama chat templates end with something like
-        # "<|start_header_id|>assistant<|end_header_id|>\n"
-        # So we find that marker and take what's after it
+
+        # Attempt to isolate the assistant reply
         if "assistant" in generated_text:
             assistant_reply = generated_text.split("assistant")[-1].strip()
         else:
-            # fallback: take text after user message
-            assistant_reply = generated_text.split(prompt["user"])[-1].strip()
+            assistant_reply = generated_text.split(prompt_user)[-1].strip()
 
         return parse_response(assistant_reply)
 
@@ -402,6 +457,7 @@ def main(args):
     model = transformers.AutoModelForCausalLM.from_pretrained(
         MODEL_NAME, device_map="auto"
     )
+
     generator = transformers.TextGenerationPipeline(
         model=model, tokenizer=tokenizer
     )
