@@ -181,8 +181,8 @@ def compute_multilabel_accuracy(true_df: pd.DataFrame, pred_df: pd.DataFrame):
             sklearn.metrics.precision_recall_fscore_support(
                 y_true_col,
                 y_pred_col,
-                average="binary",  # ✅ for per-label binary classification
-                zero_division=0,
+                average="binary",  # per-label binary classification
+                zero_division="warn",
             )
         )
 
@@ -191,7 +191,7 @@ def compute_multilabel_accuracy(true_df: pd.DataFrame, pred_df: pd.DataFrame):
             "precision": precision,
             "recall": recall,
             "f1": f1,
-            "support": support,
+            "support": y_true_col.sum(),  # sklearn returns NaN in multilabel
         }
     per_label_stats = pd.DataFrame(per_label_stats).T
 
