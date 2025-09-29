@@ -330,7 +330,7 @@ def process_tactic(
     )
 
     # Use num_workers > 0 to parallelize CPU prompt preparation
-    loader = torch.util.data.DataLoader(
+    loader = torch.utils.data.DataLoader(
         dataset,
         batch_size=1,
         shuffle=False,
@@ -457,6 +457,8 @@ def main(args):
     model = transformers.AutoModelForCausalLM.from_pretrained(
         MODEL_NAME, device_map="auto"
     )
+    # do NOT chain these
+    model = torch.compile(model, mode="max-autotune", fullgraph=True)
 
     generator = transformers.TextGenerationPipeline(
         model=model, tokenizer=tokenizer
