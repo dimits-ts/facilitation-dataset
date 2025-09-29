@@ -15,9 +15,9 @@ import util.io
 import util.classification
 
 
-MODEL_NAME = "unsloth/Meta-Llama-3.1-8B-Instruct-bnb-4bit"
-MAX_COMMENT_CTX = 2
-NUM_COMMENT_SAMPLE = 16000
+MODEL_NAME = "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"
+MAX_COMMENT_CTX = 3
+NUM_COMMENT_SAMPLE = 4000
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class Comment:
         return f"Comment by {self.user}: ``{self.comment}''"
 
 
-class ClassifiableComment(Comment):
+class ContextualizedComment(Comment):
     def __init__(self, comment: str, user: str, context: list[Comment]):
         super().__init__(comment=comment, user=user)
         self.context = context if context is not None else []
@@ -271,7 +271,7 @@ def process_tactic(
         )
         user = row.get("user", "unknown")
         comment_text = row.get("text")
-        classifiable = ClassifiableComment(
+        classifiable = ContextualizedComment(
             comment=comment_text, user=user, context=context_comments
         )
 
@@ -375,6 +375,8 @@ def main(args):
             "wikidisputes": "wikipedia",
         }
     )
+    # TODO: remove this
+    full_corpus = full_corpus[full_corpus.dataset.isin(["fora", "whow"])]
     logger.info(
         "Full dataset distribution:\n"
         + str(full_corpus.dataset.value_counts())
