@@ -3,6 +3,7 @@ import ast
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 import seaborn as sns
 import matplotlib.pyplot as plt
 import sklearn.metrics
@@ -30,7 +31,9 @@ def _simplify_label(label: str) -> str:
     return f"{prefix}.{suffix}"
 
 
-def calculate_llm_performance(pefk_df: pd.DataFrame, llm_df: pd.DataFrame):
+def calculate_llm_performance(
+    pefk_df: pd.DataFrame, llm_df: pd.DataFrame, graphs_dir: Path
+) -> None:
     fora_df = get_human_df(pefk_df, "fora")
     fora_df = fora_df.drop(
         columns=["fora.Personal story", "fora.Personal experience"]
@@ -52,7 +55,12 @@ def calculate_llm_performance(pefk_df: pd.DataFrame, llm_df: pd.DataFrame):
 
     print("Per-label accuracy:\n", results["per_label_accuracy"])
     print("\nHamming accuracy:", results["hamming_accuracy"])
-    print("\nClassification report:\n", results["classification_report"])
+    plot_multilabel_confusion_matrix(
+        cm=results["confusion_matrix"],
+        labels=results["labels"],
+        taxonomy_name="Fora",
+    )
+    util.io.save_plot(graphs_dir / "human_llm_cf_matrix_fora.png")
 
     whow_df = pefk_df[pefk_df.dataset == "whow"]
     whow_df = get_human_df(whow_df[whow_df.is_moderator == 1], "whow")
@@ -74,7 +82,12 @@ def calculate_llm_performance(pefk_df: pd.DataFrame, llm_df: pd.DataFrame):
 
     print("Per-label accuracy:\n", results["per_label_accuracy"])
     print("\nHamming accuracy:", results["hamming_accuracy"])
-    print("\nClassification report:\n", results["classification_report"])
+    plot_multilabel_confusion_matrix(
+        cm=results["confusion_matrix"],
+        labels=results["labels"],
+        taxonomy_name="WHoW",
+    )
+    util.io.save_plot(graphs_dir / "human_llm_cf_matrix_whow.png")
 
 
 def plot_classifier_results(df: pd.DataFrame, graphs_dir: Path) -> None:
@@ -125,9 +138,8 @@ def get_llm_annotations(label_dir: Path):
 
 def compute_multilabel_accuracy(true_df: pd.DataFrame, pred_df: pd.DataFrame):
     """
-    Compute per-label accuracy, overall Hamming accuracy,
-    and a classification report for multilabel classification.
-    Handles mismatched row order and extra columns in pred_df.
+    Compute metrics for multilabel classification between human and
+    LLM annotations.
 
     Args:
         true_df (pd.DataFrame): Ground-truth labels.
@@ -139,7 +151,7 @@ def compute_multilabel_accuracy(true_df: pd.DataFrame, pred_df: pd.DataFrame):
         dict: {
             "per_label_accuracy": pd.Series,
             "hamming_accuracy": float,
-            "classification_report": pd.DataFrame
+            "confusion_matrix": pd.DataFrame
         }
     """
 
@@ -175,21 +187,60 @@ def compute_multilabel_accuracy(true_df: pd.DataFrame, pred_df: pd.DataFrame):
     # Hamming accuracy
     hamming_accuracy = 1 - sklearn.metrics.hamming_loss(Y_true, Y_pred)
 
-    # Classification report (output as DataFrame)
-    clf_report = sklearn.metrics.classification_report(
-        Y_true,
-        Y_pred,
-        target_names=common_labels,
-        zero_division=0,
-        output_dict=True,
-    )
-    clf_report = pd.DataFrame(clf_report).T
+    conf_matrix = sklearn.metrics.multilabel_confusion_matrix(Y_true, Y_pred)
 
     return {
         "per_label_accuracy": per_label_acc,
         "hamming_accuracy": hamming_accuracy,
-        "classification_report": clf_report,
+        "confusion_matrix": conf_matrix,
+        "labels": common_labels,
     }
+
+
+def plot_multilabel_confusion_matrix(
+    cm: list[list[int]], labels: list[str], taxonomy_name: str
+) -> None:
+    """
+    Plots a grid of confusion matrices (2x2 each) for multilabel
+    classification.
+    """
+    n_labels = len(labels)
+    # remove redundant taxonomy title
+    labels = [label.split(".")[-1] for label in labels]
+    ncols = 3
+    nrows = int(np.ceil(n_labels / ncols))
+
+    fig, axes = plt.subplots(
+        nrows=nrows, ncols=ncols, figsize=(4 * ncols, 4 * nrows)
+    )
+    axes = axes.flatten()
+
+    for idx, (label, mat) in enumerate(zip(labels, cm)):
+        tn, fp, fn, tp = mat.ravel()
+        matrix = np.array([[tn, fp], [fn, tp]])
+
+        sns.heatmap(
+            matrix,
+            annot=True,
+            fmt="d",
+            cmap="Blues",
+            cbar=False,
+            ax=axes[idx],
+            square=True,
+            linewidths=0.5,
+        )
+        axes[idx].set_title(label, fontsize=12)
+        axes[idx].set_xlabel("Model Prediction", fontsize=10)
+        axes[idx].set_ylabel("Human Annotation", fontsize=10)
+        axes[idx].set_xticklabels(["Absent", "Present"], fontsize=9)
+        axes[idx].set_yticklabels(["Absent", "Present"], fontsize=9)
+
+    # Remove unused subplots if labels < grid size
+    for j in range(idx + 1, len(axes)):
+        fig.delaxes(axes[j])
+
+    fig.suptitle(f"LLM vs human annot. conf. matrix for {taxonomy_name}")
+    plt.tight_layout()
 
 
 def get_human_df(pefk_df: pd.DataFrame, dataset_name: str) -> pd.DataFrame:
@@ -221,7 +272,7 @@ def main(args):
     print("Running human -> LLM evaluation...")
     pefk_df = util.io.progress_load_csv(dataset_path)
     llm_df = get_llm_annotations(label_dir)
-    calculate_llm_performance(pefk_df, llm_df)
+    calculate_llm_performance(pefk_df, llm_df, graphs_dir)
 
     print("Running classifier -> LLM evaluation...")
     res_df = pd.read_csv(res_csv_path, index_col=0)
