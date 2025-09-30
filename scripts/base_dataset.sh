@@ -17,18 +17,18 @@ datasets=("$@")
 
 for datasetname in "${datasets[@]}"; do
     echo "Downloading ${datasetname}..."
-    bash "$datasetname.sh"
+    bash "base_$datasetname.sh"
     echo "Processing ${datasetname}..."
-    python "$datasetname.py"
+    python "base_$datasetname.py"
     echo "Exported $datasetname.csv"
 done
 
 # combine datasets into one_
 echo "Processing final dataset..."
-python postprocessing.py
+python base_postprocessing.py
 
 echo  "Finished dataset construction."
-python dataset_analysis.py
+python base_dataset_analysis.py
 
 # clean-up to release disk space_
 echo "Cleaning up downloads directory..."
