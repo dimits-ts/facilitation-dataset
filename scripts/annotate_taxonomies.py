@@ -18,7 +18,7 @@ import util.classification
 
 
 MODEL_NAME = "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"
-MAX_COMMENT_CTX = 3
+MAX_COMMENT_CTX = 2
 NUM_COMMENT_SAMPLE = 4000
 NUM_DATLOADER_WORKERS = 4
 
@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class Comment:
-    def __init__(self, comment: str, user: str, max_len_chars: int = 2000):
+    def __init__(self, comment: str, user: str, max_len_chars: int = 800):
         self.user = user
         if len(comment) > max_len_chars:
             self.comment = comment[:max_len_chars] + "[...]"
