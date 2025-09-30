@@ -8,12 +8,11 @@ import matplotlib.pyplot as plt
 import util.io
 
 
-INPUT_PATH = Path("../pefk.csv")
-GRAPH_PATH = Path("../graphs")
-
-
 def augmented_moderation_plot(
-    df: pd.DataFrame, mod_probability_file: Path, mod_threshold: float
+    df: pd.DataFrame,
+    mod_probability_file: Path,
+    mod_threshold: float,
+    graph_dir: Path,
 ) -> None:
     moderator_percent = (
         df.groupby("dataset")["is_moderator"]
@@ -23,7 +22,7 @@ def augmented_moderation_plot(
     moderator_percent["moderator_percent"] *= 100
 
     # --- Inferred moderator percentages ---
-    mod_probability_file = Path("../output_datasets/pefk_mod.csv")
+    mod_probability_file = Path(mod_probability_file)
     mod_threshold = 0.6
 
     mod_prob_df = util.io.progress_load_csv(mod_probability_file)
@@ -102,15 +101,18 @@ def augmented_moderation_plot(
     plt.legend(handles, new_labels, title="")
     plt.tight_layout()
 
-    util.io.save_plot(GRAPH_PATH / "augmented_analysis_moderation_perc.png")
+    util.io.save_plot(graph_dir / "augmented_analysis_moderation_perc.png")
 
 
 def main(args):
     print("Loading dataset...")
-    df = util.io.progress_load_csv(INPUT_PATH)
+    df = util.io.progress_load_csv(Path(args.dataset_path))
 
     augmented_moderation_plot(
-        df, Path(args.mod_probability_file), args.mod_probability_thres
+        df,
+        Path(args.mod_probability_file),
+        args.mod_probability_thres,
+        graph_dir=Path(args.graph_dir),
     )
 
 
@@ -119,7 +121,7 @@ if __name__ == "__main__":
         description="Generate discussion statistics and moderation plots."
     )
     parser.add_argument(
-        "--dataset_file",
+        "--dataset_path",
         required=True,
         help="Path to the dataset CSV file.",
     )
@@ -134,7 +136,16 @@ if __name__ == "__main__":
         required=False,
         type=float,
         default=0.6,
-        help="Prob. threshold for a comment to be classified as moderated.",
+        help=(
+            "Prob. threshold for a comment to be classified "
+            "as a moderator intervention."
+        ),
+    )
+    parser.add_argument(
+        "--graph_dir",
+        type=str,
+        required=True,
+        help="Directory where the graphs will be exported to",
     )
 
     args = parser.parse_args()

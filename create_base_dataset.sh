@@ -24,7 +24,7 @@ echo "Processing final dataset..."
 python base_postprocessing.py
 
 echo  "Finished dataset construction."
-python base_dataset_analysis.py
+python base_dataset_analysis.py --dataset_path="pefk.csv" --graph_dir=graphs
 
 # clean-up to release disk space_
 echo "Cleaning up downloads directory..."

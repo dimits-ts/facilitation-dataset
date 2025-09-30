@@ -16,8 +16,9 @@ python scripts/facilitation_inference.py \
 
 echo "Starting analysis..."
 python scripts/facilitation_analysis.py \
-        --dataset_file pefk.csv \
+        --dataset_path pefk.csv \
         --mod_probability_file=output_datasets/pefk_mod.csv \
-        --mod_probability_thres=0.6
+        --mod_probability_thres=0.6 \
+        --graph_dir=graphs
 
 echo "Finished facilitation analysis."

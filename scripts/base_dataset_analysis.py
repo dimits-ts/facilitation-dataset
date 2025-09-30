@@ -8,10 +8,6 @@ import matplotlib.pyplot as plt
 import util.io
 
 
-INPUT_PATH = Path("../pefk.csv")
-GRAPH_PATH = Path("../graphs")
-
-
 def convert_bytes(num):
     """
     this function will convert bytes to MB.... GB... etc
@@ -22,7 +18,7 @@ def convert_bytes(num):
         num /= 1024.0
 
 
-def comments_per_discussion_plot(df: pd.DataFrame) -> None:
+def comments_per_discussion_plot(df: pd.DataFrame, graph_dir: Path) -> None:
     disc_sizes = (
         df.groupby("conv_id").size().reset_index(name="comments_per_disc")
     )
@@ -45,10 +41,10 @@ def comments_per_discussion_plot(df: pd.DataFrame) -> None:
     plt.ylabel("Number of Discussions")
     plt.tight_layout()
 
-    util.io.save_plot(GRAPH_PATH / "analysis_comments_per_discussion.png")
+    util.io.save_plot(graph_dir / "analysis_comments_per_discussion.png")
 
 
-def moderation_plot(df: pd.DataFrame) -> float:
+def moderation_plot(df: pd.DataFrame, graph_dir: Path) -> float:
     moderator_percent = (
         df.groupby("dataset")["is_moderator"]
         .mean()
@@ -73,12 +69,15 @@ def moderation_plot(df: pd.DataFrame) -> float:
     plt.xticks(rotation=45)
     plt.tight_layout()
 
-    util.io.save_plot(GRAPH_PATH / "analysis_moderation_perc.png")
+    util.io.save_plot(graph_dir / "analysis_moderation_perc.png")
 
 
 def main(args):
+    csv_path = Path(args.dataset_path)
+    graph_dir = Path(args.graph_dir)
+
     print("Loading dataset to extract statistics...")
-    df = util.io.progress_load_csv(INPUT_PATH)
+    df = util.io.progress_load_csv(csv_path)
 
     print("*" * 25)
     print("Comments per discussion:")
@@ -103,11 +102,11 @@ def main(args):
     )
 
     print("*" * 25)
-    print(f"Dataset total size: {convert_bytes(INPUT_PATH.stat().st_size)}")
+    print(f"Dataset total size: {convert_bytes(csv_path.stat().st_size)}")
 
     comments_per_discussion_plot(df)
     comments_per_discussion_plot(df)
-    moderation_plot(df)
+    moderation_plot(df, graph_dir=graph_dir)
 
 
 if __name__ == "__main__":
@@ -115,9 +114,15 @@ if __name__ == "__main__":
         description="Generate discussion statistics and moderation plots."
     )
     parser.add_argument(
-        "--dataset_file",
+        "--dataset_path",
         required=True,
         help="Path to the dataset CSV file.",
+    )
+    parser.add_argument(
+        "--graph_dir",
+        type=str,
+        required=True,
+        help="Directory where the graphs will be exported to",
     )
     args = parser.parse_args()
     main(args)
