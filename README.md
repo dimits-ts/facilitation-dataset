@@ -42,13 +42,12 @@ conda env create -f environment.yml
 conda activate pefk-dataset
 
 # data only contained inside the datasets
-bash create_base_dataset.sh  
-
+bash create_base_dataset.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 fora
 # uncomment to include ``Inferred'' data (see Table below)
-# bash create_augmented_dataset.sh 
+# augment_dataset.sh 
 
 # uncomment to add taxonomy information to the dataset
-# bash analyze_taxonomies.bash 
+# bash add_taxonomies.sh 
 ```
 
 ## Important Notes
