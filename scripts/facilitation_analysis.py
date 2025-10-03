@@ -177,6 +177,28 @@ def collate_fn(tokenizer, batch):
     return enc
 
 
+def _get_classification_texts(
+    model_dir: Path,
+    test_df: pd.DataFrame, 
+    full_df: pd.DataFrame,
+    max_length: int,
+    label_column: str,
+    max_context_turns: int
+    ) -> list[str]:
+    tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
+    # Build dataset and take a sample (too many samples make SHAP very slow)
+    ds = util.classification.DiscussionDataset(
+        target_df=test_df,
+        full_df=full_df,
+        tokenizer=tokenizer,
+        max_length=max_length,
+        label_column=label_column,
+        max_context_turns=max_context_turns,
+    )
+    texts = [ds[i]["text"] for i in range(len(ds))]
+    return texts
+
+
 def explain_model(
     model_dir: Path,
     test_df: pd.DataFrame,
@@ -192,20 +214,16 @@ def explain_model(
     """
 
     print("Building test dataset for SHAP explanation...")
-    tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
-    # Build dataset and take a sample (too many samples make SHAP very slow)
-    ds = util.classification.DiscussionDataset(
-        target_df=test_df,
-        full_df=full_df,
-        tokenizer=tokenizer,
-        max_length=max_length,
-        label_column=label_column,
-        max_context_turns=max_context_turns,
+    texts = _get_classification_texts(
+        model_dir, 
+        test_df, 
+        full_df, 
+        max_length, 
+        label_column, 
+        max_context_turns
     )
 
-    texts = [ds[i]["text"] for i in range(len(ds))]
     print(f"Explaining {len(texts)} examples with SHAP...")
-
     explainer = TransformerExplainer(model_dir)
     shap_values = explainer.batch_explain(texts)
     shap.summary_plot(
