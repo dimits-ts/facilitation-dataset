@@ -19,6 +19,7 @@ python scripts/facilitation_analysis.py \
         --dataset_path pefk.csv \
         --mod_probability_file=output_datasets/pefk_mod.csv \
         --mod_probability_thres=0.6 \
-        --graph_dir=graphs
+        --graph_dir=graphs \
+        --model_dir=checkpoints/mod
 
 echo "Finished facilitation analysis."
