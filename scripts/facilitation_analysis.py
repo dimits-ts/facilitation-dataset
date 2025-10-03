@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import util.io
 import util.classification
 
+
 NUM_SAMPLES_SHAP = 2
 
 # Adapted from 
@@ -29,10 +30,9 @@ class TransformerExplainer:
             model_dir, reference_compile=False, attn_implementation="eager"
         ).to(device)
         self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
-        self.shap_explainer = shap.Explainer(
-            self.predict_proba, 
-            self.tokenizer
-        )
+
+        masker = shap.maskers.Text(self.tokenizer)
+        self.shap_explainer = shap.Explainer(self.predict_proba, masker)
         
     def explain(self, text, method=None):
         """
@@ -46,23 +46,37 @@ class TransformerExplainer:
         """
         return self.shap_explainer(texts)
     
-    def predict_proba(self, texts: list[str]) -> np.ndarray:
+    def predict_proba(self, texts) -> np.ndarray:
         """
-        Predict classification for a list of texts.
-        Returns probabilities for each class.
+        Predict classification probabilities for a list of texts.
+        Handles SHAP masked inputs robustly.
         """
-        if isinstance(texts, str):
+        # --- Normalize SHAP input ---
+        if isinstance(texts, np.ndarray):
+            texts = texts.tolist()
+        if isinstance(texts, (list, tuple)):
+            # Flatten nested single-item lists (SHAP often wraps them)
+            texts = [t if isinstance(t, str) else str(t) for t in texts]
+        elif isinstance(texts, str):
             texts = [texts]
-        
-        # Tokenize inputs
-        inputs = self.tokenizer(texts)
-        
-        # Get predictions
+        else:
+            raise ValueError(f"Unsupported input type for texts: {type(texts)}")
+
+        # Tokenize
+        inputs = self.tokenizer(
+            texts,
+            padding=True,
+            truncation=True,
+            return_tensors="pt"
+        ).to(self.model.device)
+
+        # Predict
         with torch.no_grad():
-            outputs = model(**inputs)
+            outputs = self.model(**inputs)
             probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
-        
-        return probabilities.numpy()
+
+        return probabilities.cpu().numpy()
+
 
 
 
@@ -223,14 +237,23 @@ def explain_model(
         max_context_turns
     )
 
-    print(f"Explaining {len(texts)} examples with SHAP...")
+    print(f"Explaining {len(texts)} examples...")
     explainer = TransformerExplainer(model_dir)
     shap_values = explainer.batch_explain(texts)
-    shap.summary_plot(
-        shap_values.values[:, :, 1],  # Positive class
-        shap_values.data,
-        feature_names=shap_values.data[0]
-    )
+    # --- Select the positive class SHAP values (index 1) ---
+    if shap_values.values.ndim == 3 and shap_values.values.shape[2] == 2:
+        shap_values_pos = shap.Explanation(
+            values=shap_values.values[:, :, 1],  # positive class
+            base_values=shap_values.base_values[:, 1],
+            data=shap_values.data,
+            feature_names=shap_values.feature_names,
+        )
+    else:
+        # If already 2D (some libraries return that directly)
+        shap_values_pos = shap_values
+
+    # --- Plot global feature importance ---
+    shap.plots.bar(shap_values_pos)
 
     # --- Save explanations ---
     plot_path = graph_dir / "shap_explanation.png"
