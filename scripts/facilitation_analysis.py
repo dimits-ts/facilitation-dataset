@@ -6,6 +6,7 @@ import shap.maskers
 import torch
 import transformers
 import seaborn as sns
+import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -13,6 +14,56 @@ import util.io
 import util.classification
 
 NUM_SAMPLES_SHAP = 2
+
+# Adapted from 
+# https://markaicode.com/transformers-model-interpretability-lime-shap-tutorial/
+class TransformerExplainer:
+    """
+    Production-ready explanation pipeline for transformer models
+    """
+    
+    def __init__(self, model_dir: Path):
+        device = 0 if torch.cuda.is_available() else -1
+
+        self.model = transformers.AutoModelForSequenceClassification.from_pretrained(
+            model_dir, reference_compile=False, attn_implementation="eager"
+        ).to(device)
+        self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
+        self.shap_explainer = shap.Explainer(
+            self.predict_proba, 
+            self.tokenizer
+        )
+        
+    def explain(self, text, method=None):
+        """
+        Generate explanations.
+        """     
+        return self.shap_explainer([text])  
+    
+    def batch_explain(self, texts):
+        """
+        Explain multiple texts efficiently.
+        """
+        return self.shap_explainer(texts)
+    
+    def predict_proba(self, texts: list[str]) -> np.ndarray:
+        """
+        Predict classification for a list of texts.
+        Returns probabilities for each class.
+        """
+        if isinstance(texts, str):
+            texts = [texts]
+        
+        # Tokenize inputs
+        inputs = self.tokenizer(texts)
+        
+        # Get predictions
+        with torch.no_grad():
+            outputs = model(**inputs)
+            probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
+        
+        return probabilities.numpy()
+
 
 
 def augmented_moderation_plot(
@@ -153,26 +204,14 @@ def explain_model(
     )
 
     texts = [ds[i]["text"] for i in range(len(ds))]
-
     print(f"Explaining {len(texts)} examples with SHAP...")
 
-    device = 0 if torch.cuda.is_available() else -1
-    # why isnt it using GPU???
-    classifier = transformers.pipeline(
-        "text-classification",
-        model=model_dir,
-        tokenizer=tokenizer,
-        top_k=None,
-        device=device,
-    )
-
-    explainer = shap.Explainer(classifier)
-    shap_values = explainer(texts)
+    explainer = TransformerExplainer(model_dir)
+    shap_values = explainer.batch_explain(texts)
     shap.summary_plot(
         shap_values.values[:, :, 1],  # Positive class
         shap_values.data,
-        feature_names=shap_values.data[0],
-        show=False
+        feature_names=shap_values.data[0]
     )
 
     # --- Save explanations ---
@@ -188,24 +227,23 @@ def main(args):
     util.classification.set_seed(util.classification.SEED)
     df = util.io.progress_load_csv(Path(args.dataset_path))
 
-    augmented_moderation_plot(
+    """augmented_moderation_plot(
         df,
         Path(args.mod_probability_file),
         args.mod_probability_thres,
         graph_dir=graph_dir,
-    )
+    )"""
 
+    print(
+        "Running explanation algorithms on model for "
+        f"N={NUM_SAMPLES_SHAP} test-set comments..."
+    )
     classification_df = util.classification.preprocess_dataset(df)
     _, _, test_df = util.classification.train_validate_test_split(
         classification_df,
         stratify_col="is_moderator",  # or "should_intervene"
         train_percent=0.7,
         validate_percent=0.2,
-    )
-
-    print(
-        "Running explanation algorithms on model for "
-        f"N={NUM_SAMPLES_SHAP} test-set comments..."
     )
     explain_model(
         model_dir=model_dir / "best_model",
