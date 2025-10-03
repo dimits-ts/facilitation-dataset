@@ -14,7 +14,7 @@ import util.io
 import util.classification
 
 
-NUM_SAMPLES_SHAP = 2
+NUM_SAMPLES_SHAP = 200
 
 # Adapted from 
 # https://markaicode.com/transformers-model-interpretability-lime-shap-tutorial/
@@ -48,15 +48,19 @@ class TransformerExplainer:
     
     def predict_proba(self, texts) -> np.ndarray:
         """
-        Predict classification probabilities for a list of texts.
-        Handles SHAP masked inputs robustly.
+        Predict classification probabilities for a list of texts, 
+        returning probabilities for BOTH classes (N, 2) to satisfy SHAP's slicing.
         """
-        # --- Normalize SHAP input ---
+        # --- Normalize SHAP input (Ensure fix for previous TypeError is included) ---
         if isinstance(texts, np.ndarray):
             texts = texts.tolist()
         if isinstance(texts, (list, tuple)):
-            # Flatten nested single-item lists (SHAP often wraps them)
-            texts = [t if isinstance(t, str) else str(t) for t in texts]
+            normalized_texts = []
+            for t in texts:
+                if isinstance(t, (list, np.ndarray)):
+                    t = t[0] if len(t) > 0 else "" 
+                normalized_texts.append(str(t)) 
+            texts = normalized_texts
         elif isinstance(texts, str):
             texts = [texts]
         else:
@@ -73,11 +77,62 @@ class TransformerExplainer:
         # Predict
         with torch.no_grad():
             outputs = self.model(**inputs)
-            probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
+            logits = outputs.logits # Assumed shape (N, 1) for BCE model
+
+            # Calculate P(Class 1) using Sigmoid
+            p_positive = torch.sigmoid(logits) 
+            
+            # Calculate P(Class 0) = 1 - P(Class 1)
+            p_negative = 1 - p_positive
+            
+            # Concatenate to create a tensor of shape (N, 2)
+            probabilities = torch.cat((p_negative, p_positive), dim=-1)
 
         return probabilities.cpu().numpy()
 
+    def _normalize_shap_input(self, texts):
+        # --- Normalize SHAP input ---
+        if isinstance(texts, np.ndarray):
+            texts = texts.tolist()
+        if isinstance(texts, (list, tuple)):
+            # Flatten nested single-item lists (SHAP often wraps them)
+            texts = [t if isinstance(t, str) else str(t) for t in texts]
+        return texts
 
+def collate_fn(tokenizer, batch):
+    texts = [b["text"] for b in batch]
+    labels = torch.tensor([b["label"] for b in batch]).unsqueeze(1)
+    enc = tokenizer(
+        texts,
+        padding="longest",
+        truncation=False,
+        max_length=8192,
+        return_tensors="pt",
+    )
+    enc["labels"] = labels
+    return enc
+
+
+def _get_classification_texts(
+    model_dir: Path,
+    test_df: pd.DataFrame, 
+    full_df: pd.DataFrame,
+    max_length: int,
+    label_column: str,
+    max_context_turns: int
+    ) -> list[str]:
+    tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
+    # Build dataset and take a sample (too many samples make SHAP very slow)
+    ds = util.classification.DiscussionDataset(
+        target_df=test_df,
+        full_df=full_df,
+        tokenizer=tokenizer,
+        max_length=max_length,
+        label_column=label_column,
+        max_context_turns=max_context_turns,
+    )
+    texts = [ds[i]["text"] for i in range(len(ds))]
+    return texts
 
 
 def augmented_moderation_plot(
@@ -240,26 +295,27 @@ def explain_model(
     print(f"Explaining {len(texts)} examples...")
     explainer = TransformerExplainer(model_dir)
     shap_values = explainer.batch_explain(texts)
-    # --- Select the positive class SHAP values (index 1) ---
-    if shap_values.values.ndim == 3 and shap_values.values.shape[2] == 2:
-        shap_values_pos = shap.Explanation(
-            values=shap_values.values[:, :, 1],  # positive class
-            base_values=shap_values.base_values[:, 1],
-            data=shap_values.data,
-            feature_names=shap_values.feature_names,
-        )
-    else:
-        # If already 2D (some libraries return that directly)
-        shap_values_pos = shap_values
+    plot_data = shap_values[:, :, 1]
 
-    # --- Plot global feature importance ---
-    shap.plots.bar(shap_values_pos)
-
-    # --- Save explanations ---
-    plot_path = graph_dir / "shap_explanation.png"
-    util.io.save_plot(plot_path)
-    print(f"SHAP explanations saved to {plot_path}.")
+    # --- 1. Global Bar Plot (Average Magnitude) ---
+    # Shows the mean absolute impact of each word/feature.
+    plt.figure(figsize=(10, 6))
+    # Passing the full explanation object allows SHAP to handle the tokenization/data
+    shap.plots.bar(plot_data, show=False)
+    plt.title("Global Feature Importance (Average Magnitude) for Positive Class")
+    plt.tight_layout()
+    util.io.save_plot(graph_dir / "shap_global_bar_plot.png")
     plt.close()
+
+    # --- 2. Global Beeswarm Plot (Distribution and Direction) ---
+    # Shows the distribution and color-coded direction of impact for each word/feature.
+    plt.figure(figsize=(10, 6))
+    shap.plots.beeswarm(plot_data, show=False)
+    plt.title("Global Feature Importance (Beeswarm Plot) for Positive Class")
+    plt.tight_layout()
+    util.io.save_plot(graph_dir / "shap_global_beeswarm_plot.png")
+    plt.close()
+
 
 
 def main(args):
