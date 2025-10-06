@@ -13,7 +13,7 @@ import util.io
 import util.classification
 
 
-NUM_SAMPLES_SHAP = 2
+NUM_SAMPLES_SHAP = 500
 
 
 def collate_fn(tokenizer, batch):
