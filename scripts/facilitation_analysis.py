@@ -6,7 +6,6 @@ import shap.maskers
 import torch
 import transformers
 import seaborn as sns
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -14,90 +13,8 @@ import util.io
 import util.classification
 
 
-NUM_SAMPLES_SHAP = 200
+NUM_SAMPLES_SHAP = 2
 
-# Adapted from 
-# https://markaicode.com/transformers-model-interpretability-lime-shap-tutorial/
-class TransformerExplainer:
-    """
-    Production-ready explanation pipeline for transformer models
-    """
-    
-    def __init__(self, model_dir: Path):
-        device = 0 if torch.cuda.is_available() else -1
-
-        self.model = transformers.AutoModelForSequenceClassification.from_pretrained(
-            model_dir, reference_compile=False, attn_implementation="eager"
-        ).to(device)
-        self.tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
-
-        masker = shap.maskers.Text(self.tokenizer)
-        self.shap_explainer = shap.Explainer(self.predict_proba, masker)
-        
-    def explain(self, text, method=None):
-        """
-        Generate explanations.
-        """     
-        return self.shap_explainer([text])  
-    
-    def batch_explain(self, texts):
-        """
-        Explain multiple texts efficiently.
-        """
-        return self.shap_explainer(texts)
-    
-    def predict_proba(self, texts) -> np.ndarray:
-        """
-        Predict classification probabilities for a list of texts, 
-        returning probabilities for BOTH classes (N, 2) to satisfy SHAP's slicing.
-        """
-        # --- Normalize SHAP input (Ensure fix for previous TypeError is included) ---
-        if isinstance(texts, np.ndarray):
-            texts = texts.tolist()
-        if isinstance(texts, (list, tuple)):
-            normalized_texts = []
-            for t in texts:
-                if isinstance(t, (list, np.ndarray)):
-                    t = t[0] if len(t) > 0 else "" 
-                normalized_texts.append(str(t)) 
-            texts = normalized_texts
-        elif isinstance(texts, str):
-            texts = [texts]
-        else:
-            raise ValueError(f"Unsupported input type for texts: {type(texts)}")
-
-        # Tokenize
-        inputs = self.tokenizer(
-            texts,
-            padding=True,
-            truncation=True,
-            return_tensors="pt"
-        ).to(self.model.device)
-
-        # Predict
-        with torch.no_grad():
-            outputs = self.model(**inputs)
-            logits = outputs.logits # Assumed shape (N, 1) for BCE model
-
-            # Calculate P(Class 1) using Sigmoid
-            p_positive = torch.sigmoid(logits) 
-            
-            # Calculate P(Class 0) = 1 - P(Class 1)
-            p_negative = 1 - p_positive
-            
-            # Concatenate to create a tensor of shape (N, 2)
-            probabilities = torch.cat((p_negative, p_positive), dim=-1)
-
-        return probabilities.cpu().numpy()
-
-    def _normalize_shap_input(self, texts):
-        # --- Normalize SHAP input ---
-        if isinstance(texts, np.ndarray):
-            texts = texts.tolist()
-        if isinstance(texts, (list, tuple)):
-            # Flatten nested single-item lists (SHAP often wraps them)
-            texts = [t if isinstance(t, str) else str(t) for t in texts]
-        return texts
 
 def collate_fn(tokenizer, batch):
     texts = [b["text"] for b in batch]
@@ -115,12 +32,12 @@ def collate_fn(tokenizer, batch):
 
 def _get_classification_texts(
     model_dir: Path,
-    test_df: pd.DataFrame, 
+    test_df: pd.DataFrame,
     full_df: pd.DataFrame,
     max_length: int,
     label_column: str,
-    max_context_turns: int
-    ) -> list[str]:
+    max_context_turns: int,
+) -> list[str]:
     tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
     # Build dataset and take a sample (too many samples make SHAP very slow)
     ds = util.classification.DiscussionDataset(
@@ -232,42 +149,6 @@ def augmented_moderation_plot(
     plt.close()
 
 
-def collate_fn(tokenizer, batch):
-    texts = [b["text"] for b in batch]
-    labels = torch.tensor([b["label"] for b in batch]).unsqueeze(1)
-    enc = tokenizer(
-        texts,
-        padding="longest",
-        truncation=False,
-        max_length=8192,
-        return_tensors="pt",
-    )
-    enc["labels"] = labels
-    return enc
-
-
-def _get_classification_texts(
-    model_dir: Path,
-    test_df: pd.DataFrame, 
-    full_df: pd.DataFrame,
-    max_length: int,
-    label_column: str,
-    max_context_turns: int
-    ) -> list[str]:
-    tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
-    # Build dataset and take a sample (too many samples make SHAP very slow)
-    ds = util.classification.DiscussionDataset(
-        target_df=test_df,
-        full_df=full_df,
-        tokenizer=tokenizer,
-        max_length=max_length,
-        label_column=label_column,
-        max_context_turns=max_context_turns,
-    )
-    texts = [ds[i]["text"] for i in range(len(ds))]
-    return texts
-
-
 def explain_model(
     model_dir: Path,
     test_df: pd.DataFrame,
@@ -284,25 +165,45 @@ def explain_model(
 
     print("Building test dataset for SHAP explanation...")
     texts = _get_classification_texts(
-        model_dir, 
-        test_df, 
-        full_df, 
-        max_length, 
-        label_column, 
-        max_context_turns
+        model_dir,
+        test_df,
+        full_df,
+        max_length,
+        label_column,
+        max_context_turns,
     )
 
     print(f"Explaining {len(texts)} examples...")
-    explainer = TransformerExplainer(model_dir)
-    shap_values = explainer.batch_explain(texts)
-    plot_data = shap_values[:, :, 1]
+
+    model = (
+        transformers.AutoModelForSequenceClassification.from_pretrained(
+            model_dir, reference_compile=False, attn_implementation="eager"
+        )
+    )
+    tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
+    pipe = transformers.pipeline(
+        "text-classification",
+        model=model,
+        tokenizer=tokenizer,
+        device=0 if torch.cuda.is_available() else -1,
+        truncation=True,
+        max_length=max_length,
+        top_k=None
+    )
+    pmodel = shap.models.TransformersPipeline(
+        pipe, rescale_to_logits=True
+    )
+    explainer = shap.Explainer(pmodel, tokenizer)
+    shap_values = explainer(texts)
+    plot_data = shap_values[:, :, -1]
 
     # --- 1. Global Bar Plot (Average Magnitude) ---
     # Shows the mean absolute impact of each word/feature.
     plt.figure(figsize=(10, 6))
-    # Passing the full explanation object allows SHAP to handle the tokenization/data
-    shap.plots.bar(plot_data, show=False)
-    plt.title("Global Feature Importance (Average Magnitude) for Positive Class")
+    # Passing the full explanation object allows SHAP to handle the
+    # tokenization/data
+    shap.plots.bar(plot_data, show=False, max_display=20)
+    plt.title("Token importance for facilitation detection")
     plt.tight_layout()
     util.io.save_plot(graph_dir / "shap_global_bar_plot.png")
     plt.close()
