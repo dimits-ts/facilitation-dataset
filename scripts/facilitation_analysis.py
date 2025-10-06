@@ -307,16 +307,6 @@ def explain_model(
     util.io.save_plot(graph_dir / "shap_global_bar_plot.png")
     plt.close()
 
-    # --- 2. Global Beeswarm Plot (Distribution and Direction) ---
-    # Shows the distribution and color-coded direction of impact for each word/feature.
-    plt.figure(figsize=(10, 6))
-    shap.plots.beeswarm(plot_data, show=False)
-    plt.title("Global Feature Importance (Beeswarm Plot) for Positive Class")
-    plt.tight_layout()
-    util.io.save_plot(graph_dir / "shap_global_beeswarm_plot.png")
-    plt.close()
-
-
 
 def main(args):
     model_dir = Path(args.model_dir)
