@@ -175,10 +175,8 @@ def explain_model(
 
     print(f"Explaining {len(texts)} examples...")
 
-    model = (
-        transformers.AutoModelForSequenceClassification.from_pretrained(
-            model_dir, reference_compile=False, attn_implementation="eager"
-        )
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        model_dir, reference_compile=False, attn_implementation="eager"
     )
     tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
     pipe = transformers.pipeline(
@@ -188,12 +186,11 @@ def explain_model(
         device=0 if torch.cuda.is_available() else -1,
         truncation=True,
         max_length=max_length,
-        top_k=None
+        top_k=None,
     )
-    pmodel = shap.models.TransformersPipeline(
-        pipe, rescale_to_logits=True
-    )
-    explainer = shap.Explainer(pmodel, tokenizer)
+    pmodel = shap.models.TransformersPipeline(pipe, rescale_to_logits=True)
+    masker = shap.maskers.Text(tokenizer, mask_token="[MASK]")
+    explainer = shap.Explainer(pmodel, masker)
     shap_values = explainer(texts)
     plot_data = shap_values[:, :, -1]
 
