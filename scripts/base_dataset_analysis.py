@@ -104,8 +104,8 @@ def main(args):
     print("*" * 25)
     print(f"Dataset total size: {convert_bytes(csv_path.stat().st_size)}")
 
-    comments_per_discussion_plot(df)
-    comments_per_discussion_plot(df)
+    comments_per_discussion_plot(df, graph_dir)
+    comments_per_discussion_plot(df, graph_dir)
     moderation_plot(df, graph_dir=graph_dir)
 
 
