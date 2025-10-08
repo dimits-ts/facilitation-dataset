@@ -1,5 +1,4 @@
 import argparse
-import ast
 from pathlib import Path
 
 import pandas as pd
@@ -9,6 +8,7 @@ import matplotlib.pyplot as plt
 import sklearn.metrics
 
 import util.io
+import util.preprocessing
 
 
 MAX_LABEL_LENGTH_CHARS = 10
@@ -34,11 +34,10 @@ def _simplify_label(label: str) -> str:
 def calculate_llm_performance(
     pefk_df: pd.DataFrame, llm_df: pd.DataFrame, graphs_dir: Path
 ) -> None:
-    fora_df = get_human_df(pefk_df, "fora")
+    fora_df = util.preprocessing.get_human_df(pefk_df, "fora")
     fora_df = fora_df.drop(
         columns=["fora.Personal story", "fora.Personal experience"]
     )
-
     fora_mapping = {
         "fora.Expressing Agreement": "fora.Express affirmation",
         "fora.Expressing Appreciation": "fora.Express appreciation",
@@ -48,7 +47,6 @@ def calculate_llm_performance(
         "fora.Specific Invitation to Participate": "fora.Specific invitation",
         "fora.Open Invitation to Participate": "fora.Open invitation",
     }
-
     results = compute_multilabel_accuracy(
         true_df=fora_df, pred_df=llm_df.rename(columns=fora_mapping)
     )
@@ -62,8 +60,9 @@ def calculate_llm_performance(
     )
     util.io.save_plot(graphs_dir / "human_llm_cf_matrix_fora.png")
 
-    whow_df = pefk_df[pefk_df.dataset == "whow"]
-    whow_df = get_human_df(whow_df[whow_df.is_moderator == 1], "whow")
+    whow_df = util.preprocessing.get_human_df(
+        pefk_df[pefk_df.is_moderator == 1], "whow"
+    )
     whow_mapping = {
         "whow.Instruction": "whow.instruction",
         "whow.Interpretation": "whow.interpretation",
@@ -262,17 +261,6 @@ def plot_multilabel_confusion_matrix(
 
     fig.suptitle(f"LLM vs human annot. conf. matrix for {taxonomy_name}")
     plt.tight_layout()
-
-
-def get_human_df(pefk_df: pd.DataFrame, dataset_name: str) -> pd.DataFrame:
-    df = pefk_df[pefk_df.dataset == dataset_name].copy()
-    df = df[df.notes.str.strip().str.len() > 0]
-    notes = df.notes.apply(ast.literal_eval)
-    notes = notes.apply(pd.Series)
-    notes = notes.add_prefix(f"{dataset_name}.")
-    df = df[["message_id"]].join(notes)
-
-    return df
 
 
 def main(args):

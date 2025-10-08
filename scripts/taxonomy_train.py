@@ -10,6 +10,7 @@ import sklearn.metrics
 from tqdm.auto import tqdm
 
 import util.classification
+import util.preprocessing
 import util.io
 
 
@@ -23,37 +24,6 @@ EARLY_STOP_PATIENCE = 5
 FINETUNE_ONLY_HEAD = True
 MODEL = "answerdotai/ModernBERT-base"
 CTX_LENGTH_COMMENTS = 2
-
-
-def load_labels(base_df: pd.DataFrame, labels_dir: Path) -> pd.DataFrame:
-    df = base_df.copy()
-    for label_file in tqdm(
-        list(labels_dir.glob("*.csv")), desc="Loading labels"
-    ):
-        label_name = label_file.stem
-        label_df = pd.read_csv(label_file)
-        if not {"message_id", "is_match"}.issubset(label_df.columns):
-            raise ValueError(
-                f"{label_file} must have 'message_id' and 'is_match'"
-            )
-        df = df.merge(
-            label_df[["message_id", "is_match"]].rename(
-                columns={"is_match": label_name}
-            ),
-            on="message_id",
-            how="left",
-        )
-
-        df[label_name] = (
-            df[label_name]
-            # object -> boolean
-            .infer_objects(copy=False)
-            .astype("boolean")
-            .fillna(False)
-            .astype(int)
-        )
-
-    return df
 
 
 def train_model(
@@ -308,67 +278,75 @@ def collate_fn(tokenizer, batch: list[dict[str, str | list]], num_labels: int):
     return enc
 
 
-def main(args):
-    def make_dataset(target_df, tokenizer):
-        return util.classification.DiscussionDataset(
-            target_df,
-            full_df=df,  # full dataset for context
-            tokenizer=tokenizer,
-            max_length=MAX_LENGTH,
-            label_column=label_names,
-            max_context_turns=CTX_LENGTH_COMMENTS,
-        )
+def get_fora_df(pefk_df: pd.DataFrame) -> pd.DataFrame:
+    fora_df = util.preprocessing.get_human_df(pefk_df, "fora")
+    fora_df = fora_df.drop(
+        columns=["fora.Personal story", "fora.Personal experience"]
+    )
+    return fora_df
 
-    dataset_path = Path(args.dataset_path)
-    labels_dir = Path(args.labels_dir)
-    output_dir = Path(args.output_dir)
-    logs_dir = Path(args.logs_dir)
-    label_names = [f.stem for f in labels_dir.glob("*.csv")]
-    tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
-    results_csv_path = logs_dir / "res.csv"
-    util.classification.set_seed(util.classification.SEED)
 
-    # ================ Dataset preprocessing ================
-    df = util.io.progress_load_csv(dataset_path)
-    df = util.classification.preprocess_dataset(df)
-    df = load_labels(df, labels_dir)
+def get_whow_df(pefk_df: pd.DataFrame) -> pd.DataFrame:
+    return util.preprocessing.get_human_df(
+        pefk_df[pefk_df.is_moderator == 1], "whow"
+    )
 
-    # keep only annotated rows as targets
-    target_mask = df[label_names].sum(axis=1) > 0
-    target_df = df[target_mask].copy()
 
-    train_df, val_df, test_df = util.classification.train_validate_test_split(
+def get_label_columns(df: pd.DataFrame) -> list[str]:
+    return [x for x in df.columns if "." in x]
+
+
+def train_pipeline(
+    target_df: pd.DataFrame,
+    full_df: pd.DataFrame,
+    tokenizer,
+    output_dir: Path,
+    logs_dir: Path,
+) -> None:
+    label_names = get_label_columns(target_df)
+    print("Target label names: ", label_names)
+
+    train_df, val_df, _ = util.classification.train_validate_test_split(
         target_df,
         train_percent=0.7,
         validate_percent=0.2,
     )
+    print("Creating train dataset...")
+    train_ds = make_dataset(train_df, full_df, tokenizer, label_names)
+    print("Creating validation dataset...")
+    val_ds = make_dataset(val_df, full_df, tokenizer, label_names)
 
-    # ================ Training ================
-    if not args.only_test:
-        print("Creating train dataset...")
-        train_ds = make_dataset(train_df, tokenizer)
-        print("Creating validation dataset...")
-        val_ds = make_dataset(val_df, tokenizer)
-        print("Starting training")
-        train_model(
-            train_ds,
-            val_ds,
-            FINETUNE_ONLY_HEAD,
-            output_dir,
-            logs_dir,
-            tokenizer,
-            label_names,
-        )
-        print("Training complete.")
-    else:
-        print("Skipping training as per cmd argument.")
+    print("Starting training")
+    train_model(
+        train_ds,
+        val_ds,
+        FINETUNE_ONLY_HEAD,
+        output_dir,
+        logs_dir,
+        tokenizer,
+        label_names,
+    )
+    print("Training complete.")
 
-    # ================ Evaluation ================
+
+def evaluation_pipeline(
+    target_df: pd.DataFrame,
+    full_df: pd.DataFrame,
+    tokenizer,
+    model_dir: Path,
+    output_csv_path: Path,
+):
+    label_names = get_label_columns(target_df)
+    _, _, test_df = util.classification.train_validate_test_split(
+        target_df,
+        train_percent=0.7,
+        validate_percent=0.2,
+    )
     print("Creating test dataset...")
-    test_ds = make_dataset(test_df, tokenizer)
+    test_ds = make_dataset(test_df, full_df, tokenizer, label_names)
     print("Evaluating model...")
     res_df = evaluate_model(
-        model_dir=output_dir,
+        model_dir=model_dir,
         test_ds=test_ds,
         tokenizer=tokenizer,
         label_names=label_names,
@@ -376,8 +354,77 @@ def main(args):
     )
     print("Results")
     print(res_df)
-    res_df.to_csv(results_csv_path)
-    print(f"Results saved to {results_csv_path}")
+    res_df.to_csv(output_csv_path)
+    print(f"Results saved to {output_csv_path}.")
+
+
+def make_dataset(target_df, full_df, tokenizer, label_names):
+    return util.classification.DiscussionDataset(
+        target_df=target_df,
+        full_df=full_df,  # full dataset for context
+        tokenizer=tokenizer,
+        max_length=MAX_LENGTH,
+        label_column=label_names,
+        max_context_turns=CTX_LENGTH_COMMENTS,
+    )
+
+
+def main(args):
+    dataset_path = Path(args.dataset_path)
+    output_dir = Path(args.output_dir)
+    logs_dir = Path(args.logs_dir)
+
+    tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
+    util.classification.set_seed(util.classification.SEED)
+
+    # ================ Dataset preprocessing ================
+    df = util.io.progress_load_csv(dataset_path)
+    df = util.classification.preprocess_dataset(df)
+    fora_df = get_fora_df(df)
+    whow_df = get_whow_df(df)
+
+    # ================ Training ================
+    if not args.only_test:
+        print("Starting training for Fora...")
+        train_pipeline(
+            target_df=fora_df,
+            full_df=df,
+            tokenizer=tokenizer,
+            output_dir=output_dir / "fora",
+            logs_dir=logs_dir / "fora",
+        )
+
+        print("Starting training for WHoW...")
+        train_pipeline(
+            target_df=whow_df,
+            full_df=df,
+            tokenizer=tokenizer,
+            output_dir=output_dir / "whow",
+            logs_dir=logs_dir / "whow",
+        )
+    else:
+        print("Skipping training as per cmd argument.")
+
+    print("Starting evaluation for Fora...")
+    evaluation_pipeline(
+        target_df=fora_df,
+        full_df=df,
+        tokenizer=tokenizer,
+        model_dir=output_dir / "fora",
+        output_csv_path=logs_dir / "fora" / "res.csv",
+    )
+    print("Starting evaluation for WHoW...")
+    evaluation_pipeline(
+        target_df=whow_df,
+        full_df=df,
+        tokenizer=tokenizer,
+        model_dir=output_dir / "whow",
+        output_csv_path=logs_dir / "whow" / "res.csv",
+    )
+
+    print("Finished model pipeline.")
+
+    # ================ Evaluation ================
 
 
 if __name__ == "__main__":
@@ -389,12 +436,6 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Path to main dataset CSV",
-    )
-    parser.add_argument(
-        "--labels_dir",
-        type=str,
-        required=True,
-        help="Directory with per-label CSVs",
     )
     parser.add_argument(
         "--output_dir", type=str, required=True, help="Output directory"

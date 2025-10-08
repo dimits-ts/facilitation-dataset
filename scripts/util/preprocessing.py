@@ -1,4 +1,5 @@
 import hashlib
+import ast
 
 import pandas as pd
 
@@ -97,3 +98,14 @@ def notes_from_columns(df: pd.DataFrame, cols: list[str]) -> pd.Series:
         lambda row: {col: row.get(col) for col in cols},
         axis=1,
     )
+
+
+def get_human_df(pefk_df: pd.DataFrame, dataset_name: str) -> pd.DataFrame:
+    df = pefk_df[pefk_df.dataset == dataset_name].copy()
+    df = df[df.notes.str.strip().str.len() > 0]
+    notes = df.notes.apply(ast.literal_eval)
+    notes = notes.apply(pd.Series)
+    notes = notes.add_prefix(f"{dataset_name}.")
+    df = df.join(notes)
+
+    return df
