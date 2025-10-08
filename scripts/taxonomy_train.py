@@ -14,13 +14,13 @@ import util.preprocessing
 import util.io
 
 
-EVAL_STEPS = 500
-EPOCHS = 50
+EVAL_STEPS = 2000
+EPOCHS = 3500
 MAX_LENGTH = 8192
 BATCH_SIZE = 32
 EARLY_STOP_WARMUP = 0
-EARLY_STOP_THRESHOLD = 0.01
-EARLY_STOP_PATIENCE = 5
+EARLY_STOP_THRESHOLD = 0.0001
+EARLY_STOP_PATIENCE = 6
 FINETUNE_ONLY_HEAD = True
 MODEL = "answerdotai/ModernBERT-base"
 CTX_LENGTH_COMMENTS = 2
@@ -287,9 +287,7 @@ def get_fora_df(pefk_df: pd.DataFrame) -> pd.DataFrame:
 
 
 def get_whow_df(pefk_df: pd.DataFrame) -> pd.DataFrame:
-    return util.preprocessing.get_human_df(
-        pefk_df[pefk_df.is_moderator == 1], "whow"
-    )
+    return util.preprocessing.get_human_df(pefk_df, "whow")
 
 
 def get_label_columns(df: pd.DataFrame) -> list[str]:
@@ -380,8 +378,13 @@ def main(args):
     # ================ Dataset preprocessing ================
     df = util.io.progress_load_csv(dataset_path)
     df = util.classification.preprocess_dataset(df)
-    fora_df = get_fora_df(df)
-    whow_df = get_whow_df(df)
+    mod_df = df[df.is_moderator == 1]
+    print(
+        f"Selected {len(mod_df)} mod comments for training "
+        f"out of {len(df)} total comments."
+    )
+    fora_df = get_fora_df(mod_df)
+    whow_df = get_whow_df(mod_df)
 
     # ================ Training ================
     if not args.only_test:
