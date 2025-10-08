@@ -126,7 +126,15 @@ def main(args: argparse.Namespace) -> None:
     output_column_name = args.output_column_name
 
     # model ────────────────────────────────────────────────────────────────
-    model, tokenizer = load_trained_model_tokenizer(model_dir)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        model_dir / "best_model"
+    )
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        model_dir / "best_model",
+        reference_compile=False,
+        attn_implementation="eager",
+    ).to("cuda")
+    model.eval()
 
     # load & clean ─────────────────────────────────────────────────────────
     df = util.io.progress_load_csv(src_path)
