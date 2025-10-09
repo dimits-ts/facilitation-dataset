@@ -24,4 +24,3 @@ dependencies:
       - transformers
       - tensorboard
       - bitsandbytes
-      - flash-attn
