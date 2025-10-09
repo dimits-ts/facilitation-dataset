@@ -11,14 +11,12 @@ python scripts/taxonomy_train.py \
     --dataset_path pefk.csv \
     --output_dir checkpoints/taxonomies/fora \
     --logs_dir=logs/taxonomies_training/fora \
-    --labels_dir=taxonomies/output \ # shared output folder
     --sub_dataset_name=fora
 
 python scripts/taxonomy_train.py \
     --dataset_path pefk.csv \
     --output_dir checkpoints/taxonomies/whow \
     --logs_dir=logs/taxonomies_training/whow \
-    --labels_dir=taxonomies/output \ # shared output folder
     --sub_dataset_name=whow
 
 

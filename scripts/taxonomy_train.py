@@ -14,15 +14,15 @@ import util.preprocessing
 import util.io
 
 
-EVAL_STEPS = 2000
-EPOCHS = 3500
-MAX_LENGTH = 8192
-BATCH_SIZE = 32
+EVAL_STEPS = 1000
+EPOCHS = 1500
+MAX_LENGTH = 2048
+BATCH_SIZE = 16
 EARLY_STOP_WARMUP = 0
 EARLY_STOP_THRESHOLD = 0.0001
 EARLY_STOP_PATIENCE = 6
 FINETUNE_ONLY_HEAD = True
-MODEL = "answerdotai/ModernBERT-base"
+MODEL = "answerdotai/ModernBERT-large"
 CTX_LENGTH_COMMENTS = 2
 
 
@@ -41,8 +41,6 @@ def train_model(
     num_labels = len(label_names)
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
         MODEL,
-        reference_compile=False,
-        attn_implementation="eager",
         num_labels=num_labels,
         problem_type="multi_label_classification",
     ).to("cuda")
@@ -114,8 +112,6 @@ def evaluate_model(
     best_model_dir = model_dir / "best_model"
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
         best_model_dir,
-        reference_compile=False,
-        attn_implementation="eager",
         num_labels=len(label_names),
         problem_type="multi_label_classification",
     )
@@ -371,8 +367,12 @@ def main(args):
     target_df = util.preprocessing.get_human_df(mod_df, args.sub_dataset_name)
     print(
         f"Selected {len(target_df)} mod comments for training "
-        f"out of {len(df)} total comments."
+        f"out of {len(df[df.dataset == args.sub_dataset_name])} "
+        "total comments."
     )
+
+    print("Taxonomy distribution:")
+    print((target_df[get_label_columns(target_df)] != 0).sum())
 
     # ================ Training ================
     if not args.only_test:
