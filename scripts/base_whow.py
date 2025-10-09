@@ -43,17 +43,10 @@ def merge_back_to_back_comments(df: pd.DataFrame) -> pd.DataFrame:
             "role": "first",
             "text": " ".join,
             "dialogue act": ",".join,
-            # change to 1 if any is 1, leave -1 if all are -1
-            "informational motive": "max",
-            "social motive": "max",
-            "coordinative motive": "max",
         }
     )
     merged = merged.rename(
         columns={
-            "informational motive": "informational_motive",
-            "social motive": "social_motive",
-            "coordinative motive": "coordinative_motive",
             "dialogue act": "dialogue_act",
         }
     )
