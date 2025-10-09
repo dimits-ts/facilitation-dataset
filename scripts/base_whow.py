@@ -115,19 +115,11 @@ def main():
         message_id_col="message_id",
         order_col="speaker_turn",
     )
-
-    df.informational_motive = df.informational_motive.apply(lambda x: x == 1)
-    df.social_motive = df.social_motive.apply(lambda x: x == 1)
-    df.coordinative_motive = df.coordinative_motive.apply(lambda x: x == 1)
+    
     df = expand_dialogue_acts(df)
-
     df["notes"] = util.preprocessing.notes_from_columns(
         df,
-        [
-            "informational_motive",
-            "social_motive",
-            "coordinative_motive",
-        ] + DIALOGUE_ACTS,
+        DIALOGUE_ACTS,
     )
 
     df["dataset"] = "whow"

@@ -30,8 +30,6 @@ def main():
         df["notes"] = util.preprocessing.notes_from_columns(
             df,
             [
-                "Personal story",
-                "Personal experience",
                 "Express affirmation",
                 "Specific invitation",
                 "Provide example",
