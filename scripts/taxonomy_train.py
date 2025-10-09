@@ -119,6 +119,7 @@ def evaluate_model(
         num_labels=len(label_names),
         problem_type="multi_label_classification",
     )
+    model.to("cuda" if torch.cuda.is_available() else "cpu")
 
     model.eval()
     preds = []
@@ -278,18 +279,6 @@ def collate_fn(tokenizer, batch: list[dict[str, str | list]], num_labels: int):
     return enc
 
 
-def get_fora_df(pefk_df: pd.DataFrame) -> pd.DataFrame:
-    fora_df = util.preprocessing.get_human_df(pefk_df, "fora")
-    fora_df = fora_df.drop(
-        columns=["fora.Personal story", "fora.Personal experience"]
-    )
-    return fora_df
-
-
-def get_whow_df(pefk_df: pd.DataFrame) -> pd.DataFrame:
-    return util.preprocessing.get_human_df(pefk_df, "whow")
-
-
 def get_label_columns(df: pd.DataFrame) -> list[str]:
     return [x for x in df.columns if "." in x]
 
@@ -379,52 +368,33 @@ def main(args):
     df = util.io.progress_load_csv(dataset_path)
     df = util.classification.preprocess_dataset(df)
     mod_df = df[df.is_moderator == 1]
+    target_df = util.preprocessing.get_human_df(mod_df, args.sub_dataset_name)
     print(
-        f"Selected {len(mod_df)} mod comments for training "
+        f"Selected {len(target_df)} mod comments for training "
         f"out of {len(df)} total comments."
     )
-    fora_df = get_fora_df(mod_df)
-    whow_df = get_whow_df(mod_df)
 
     # ================ Training ================
     if not args.only_test:
-        print("Starting training for Fora...")
+        print("Starting training...")
         train_pipeline(
-            target_df=fora_df,
+            target_df=target_df,
             full_df=df,
             tokenizer=tokenizer,
-            output_dir=output_dir / "fora",
-            logs_dir=logs_dir / "fora",
-        )
-
-        print("Starting training for WHoW...")
-        train_pipeline(
-            target_df=whow_df,
-            full_df=df,
-            tokenizer=tokenizer,
-            output_dir=output_dir / "whow",
-            logs_dir=logs_dir / "whow",
+            output_dir=output_dir,
+            logs_dir=logs_dir,
         )
     else:
         print("Skipping training as per cmd argument.")
 
-    print("Starting evaluation for Fora...")
+    print("Starting evaluation...")
     evaluation_pipeline(
-        target_df=fora_df,
+        target_df=target_df,
         full_df=df,
         tokenizer=tokenizer,
-        model_dir=output_dir / "fora",
-        output_csv_path=logs_dir / "fora" / "res.csv",
+        model_dir=output_dir,
+        output_csv_path=logs_dir / "res.csv",
     )
-    print("Starting evaluation for WHoW...")
-    evaluation_pipeline(
-        target_df=whow_df,
-        full_df=df,
-        tokenizer=tokenizer,
-        model_dir=output_dir / "whow",
-        output_csv_path=logs_dir / "whow" / "res.csv",
-    )
-
     print("Finished model pipeline.")
 
     # ================ Evaluation ================
@@ -439,6 +409,15 @@ if __name__ == "__main__":
         type=str,
         required=True,
         help="Path to main dataset CSV",
+    )
+    parser.add_argument(
+        "--sub_dataset_name",
+        type=str,
+        required=True,
+        help=(
+            "The name of the sub-dataset to be "
+            "used for training. 'fora' or 'whow'"
+        ),
     )
     parser.add_argument(
         "--output_dir", type=str, required=True, help="Output directory"
