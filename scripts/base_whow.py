@@ -115,7 +115,7 @@ def main():
         message_id_col="message_id",
         order_col="speaker_turn",
     )
-    
+
     df = expand_dialogue_acts(df)
     df["notes"] = util.preprocessing.notes_from_columns(
         df,
