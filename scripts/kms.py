@@ -21,11 +21,11 @@ import util.preprocessing
 import util.classification
 
 
-EPOCHS = 1500
+EPOCHS = 100000
 EARLY_STOP_ROUNDS = 6
 MAX_FEATURES = 40000
 CTX_LENGTH_COMMENTS = 3
-N_JOBS = 8
+N_JOBS = 32
 
 
 def get_label_columns(df: pd.DataFrame) -> list[str]:
@@ -41,9 +41,9 @@ def vectorize_text(train_texts, val_texts, test_texts=None):
         vectorizer.transform(test_texts) if test_texts is not None else None
     )
     return (
-        xgb.DMatrix(X_train),
-        xgb.DMatrix(X_val),
-        xgb.DMatrix(X_test),
+        X_train,
+        X_val,
+        X_test,
         vectorizer,
     )
 
@@ -63,7 +63,7 @@ def train_xgb_models(
             scale_pos_weight=pos_weight,
             n_estimators=EPOCHS,
             learning_rate=0.05,
-            max_depth=6,
+            max_depth=5,
             subsample=0.8,
             colsample_bytree=0.8,
             tree_method="hist",
