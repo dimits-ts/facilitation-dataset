@@ -10,17 +10,17 @@ import util.classification
 import util.io
 
 
-EVAL_STEPS = 4000
-EPOCHS = 120
-MAX_LENGTH = 8192
-BATCH_SIZE = 24
-EARLY_STOP_WARMUP = 12000
+EVAL_STEPS = 750
+EPOCHS = 200
+MAX_LENGTH = 4096
+BATCH_SIZE = 48
+EARLY_STOP_WARMUP = 0
 EARLY_STOP_THRESHOLD = 0.001
-EARLY_STOP_PATIENCE = 5
+EARLY_STOP_PATIENCE = 8
 FINETUNE_ONLY_HEAD = True
 TEST_METRICS = {"loss", "accuracy", "f1"}
 CTX_LENGTH_COMMENTS = 4
-MODEL = "answerdotai/ModernBERT-base"
+MODEL = "answerdotai/ModernBERT-large"
 
 
 def train_model(
@@ -37,8 +37,6 @@ def train_model(
 
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
         MODEL,
-        reference_compile=False,
-        attn_implementation="eager",
         num_labels=1,
         problem_type="multi_label_classification",
     )
@@ -95,6 +93,7 @@ def train_model(
 def test_model(
     output_dir: Path,
     test_df: pd.DataFrame,
+    full_df: pd.DataFrame,
     tokenizer: transformers.PreTrainedTokenizerBase,
     label_column: str,
 ) -> pd.DataFrame:
@@ -117,17 +116,23 @@ def test_model(
     # ── build eval datasets dict ─────────────────────────────────────────────
     def make_ds(df):
         return util.classification.DiscussionDataset(
-            df.reset_index(drop=True),
-            df.reset_index(drop=True),
-            tokenizer,
-            MAX_LENGTH,
+            full_df=full_df.reset_index(drop=True),
+            target_df=df.reset_index(drop=True),
+            tokenizer=tokenizer,
+            max_length=MAX_LENGTH,
             label_column=label_column,
             max_context_turns=CTX_LENGTH_COMMENTS,
         )
 
     eval_dict = {name: make_ds(df) for name, df in test_df.groupby("dataset")}
-    full_ds = make_ds(test_df)
-
+    full_ds = util.classification.DiscussionDataset(
+        full_df=full_df.reset_index(drop=True),
+        target_df=test_df.reset_index(drop=True),
+        tokenizer=tokenizer,
+        max_length=MAX_LENGTH,
+        label_column=label_column,
+        max_context_turns=CTX_LENGTH_COMMENTS,
+    )
     trainer = util.classification.BucketedTrainer(
         bucket_batch_size=BATCH_SIZE,
         pos_weight=1.0,  # not used in eval mode
@@ -142,7 +147,7 @@ def test_model(
         eval_dataset=None,
         compute_metrics=util.classification.compute_metrics,
         data_collator=lambda b: collate_fn(tokenizer, b),
-        device="cuda"
+        device="cuda",
     )
 
     individual_raw = trainer.evaluate(eval_dataset=eval_dict)
@@ -163,8 +168,6 @@ def precision_recall_table(
 ):
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
         model_dir,
-        reference_compile=False,
-        attn_implementation="eager",
         num_labels=1,
         problem_type="multi_label_classification",
     )
@@ -259,17 +262,19 @@ def main(args) -> None:
     tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
 
     train_dataset = util.classification.DiscussionDataset(
-        train_df,
-        tokenizer,
-        MAX_LENGTH,
-        target_label,
+        full_df=df,
+        target_df=train_df,
+        tokenizer=tokenizer,
+        max_length=MAX_LENGTH,
+        label_column=target_label,
         max_context_turns=CTX_LENGTH_COMMENTS,
     )
     val_dataset = util.classification.DiscussionDataset(
-        val_df,
-        tokenizer,
-        MAX_LENGTH,
-        target_label,
+        full_df=df,
+        target_df=val_df,
+        tokenizer=tokenizer,
+        max_length=MAX_LENGTH,
+        label_column=target_label,
         max_context_turns=CTX_LENGTH_COMMENTS,
     )
 
