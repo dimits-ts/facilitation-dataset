@@ -35,10 +35,21 @@ def train_model(
     tokenizer,
     label_names: list[str],
 ) -> None:
+    num_labels = len(label_names)
+
+    # ── compute pos_weight per label ─────────────────────────────
+    # train_ds must have access to labels in tensor form
+    all_labels = torch.vstack([b["label"] for b in train_ds])
+    # shape: (num_examples, num_labels)
+    pos_weight = (
+        ((all_labels == 0).sum(0) / (all_labels == 1).sum(0))
+        .float()
+    )
+    print("Computed pos_weight per label:", pos_weight)
+
     def collate(batch):
         return collate_fn(tokenizer, batch, num_labels)
 
-    num_labels = len(label_names)
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
         MODEL,
         num_labels=num_labels,
@@ -77,6 +88,7 @@ def train_model(
     trainer = util.classification.BucketedTrainer(
         bucket_batch_size=BATCH_SIZE,
         model=model,
+        pos_weight=pos_weight,  # <-- tensor per label
         args=training_args,
         train_dataset=train_ds,
         eval_dataset=val_ds,

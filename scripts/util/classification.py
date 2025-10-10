@@ -204,15 +204,20 @@ class WeightedLossTrainer(transformers.Trainer):
         self, pos_weight: Iterable[float] | None = None, *args, **kwargs
     ):
         super().__init__(*args, **kwargs)
+        # pos_weight should be a tensor of shape (num_labels,)
         self.pos_weight = (
-            None if pos_weight is None else torch.tensor(pos_weight)
+            None
+            if pos_weight is None
+            else torch.tensor(pos_weight, dtype=torch.float)
         )
 
     def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
-        labels = inputs.get("labels").float()
+        labels = inputs.get(
+            "labels"
+        ).float()  # shape: (batch_size, num_labels)
         outputs = model(**inputs)
-        logits = outputs.get("logits").view(-1)
-        labels = labels.view(-1)
+        logits = outputs.get("logits")  # shape: (batch_size, num_labels)
+
         loss_fct = torch.nn.BCEWithLogitsLoss(
             pos_weight=(
                 None
@@ -220,7 +225,9 @@ class WeightedLossTrainer(transformers.Trainer):
                 else self.pos_weight.to(logits.device)
             )
         )
-        loss = loss_fct(logits, labels)
+        loss = loss_fct(
+            logits, labels
+        )  # BCEWithLogitsLoss supports per-label pos_weight
 
         return (loss, outputs) if return_outputs else loss
 
