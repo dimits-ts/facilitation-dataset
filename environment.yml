@@ -16,7 +16,6 @@ dependencies:
   - notebook 
   - ipywidgets
   - coloredlogs
-  - sentence-transformers
   - pip
   - pip:
       - py3langid
@@ -25,3 +24,4 @@ dependencies:
       - transformers
       - tensorboard
       - bitsandbytes
+      - sentence-transformers

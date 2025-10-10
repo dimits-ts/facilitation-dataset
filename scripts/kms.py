@@ -41,7 +41,7 @@ def embed_texts(texts, tokenizer, model, batch_size=8, device="cuda"):
     all_embeddings = []
 
     for i in tqdm(range(0, len(texts), batch_size), desc="Embedding texts"):
-        batch_texts = texts[i: i + batch_size]
+        batch_texts = texts[i : i + batch_size]
 
         # Tokenize on CPU
         encoded = tokenizer(
@@ -105,6 +105,49 @@ def vectorize_text(train_texts, val_texts, test_texts=None, batch_size=32):
         )
 
     return X_train, X_val, X_test
+
+
+def oversample_train(X_train, y_train):
+    """
+    Randomly oversample positives for each label to balance the dataset.
+
+    X_train: np.ndarray, shape (n_samples, n_features)
+    y_train: np.ndarray, shape (n_samples, n_labels)
+
+    Returns oversampled X_train, y_train
+    """
+    n_samples, n_labels = y_train.shape
+    X_new, y_new = [], []
+
+    for i in range(n_labels):
+        # Positive and negative indices for label i
+        pos_idx = np.where(y_train[:, i] == 1)[0]
+        neg_idx = np.where(y_train[:, i] == 0)[0]
+
+        # Oversample positives to match number of negatives
+        if len(pos_idx) == 0:
+            # Skip if no positives
+            continue
+        n_to_sample = len(neg_idx) - len(pos_idx)
+        if n_to_sample > 0:
+            sampled_pos_idx = np.random.choice(
+                pos_idx, size=n_to_sample, replace=True
+            )
+            X_new.append(X_train[sampled_pos_idx])
+            y_new.append(
+                np.tile(y_train[sampled_pos_idx, i].reshape(-1, 1), n_labels)
+            )
+
+    if X_new:
+        X_train_oversampled = np.vstack([X_train] + X_new)
+        y_train_oversampled = np.vstack([y_train] + y_new)
+    else:
+        X_train_oversampled = X_train
+        y_train_oversampled = y_train
+
+    # Shuffle
+    perm = np.random.permutation(len(X_train_oversampled))
+    return X_train_oversampled[perm], y_train_oversampled[perm]
 
 
 def train_xgb_models(
@@ -227,12 +270,14 @@ def train_pipeline(target_df: pd.DataFrame, output_dir: Path, logs_dir: Path):
     y_val = val_df[label_names].values
     y_test = test_df[label_names].values
 
+    X_train, y_train = oversample_train(X_train, y_train)
+
     models = train_xgb_models(
         X_train, y_train, X_val, y_val, label_names, output_dir
     )
 
     print("Evaluating models...")
-    res_df = evaluate_xgb_models(models, X_test, y_test, label_names)
+    res_df = evaluate_xgb_models(models, X_val, y_val, label_names)
     res_df.to_csv(logs_dir / "res_xgboost.csv", index=False)
     print("Results saved to", logs_dir / "res_xgboost.csv")
     print(res_df)
