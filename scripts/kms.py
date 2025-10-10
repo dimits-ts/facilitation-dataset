@@ -1,51 +1,110 @@
 from pathlib import Path
 import argparse
 import joblib
+
+from tqdm.auto import tqdm
 import pandas as pd
 import numpy as np
-from tqdm.auto import tqdm
-
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics import (
-    accuracy_score,
-    precision_score,
-    recall_score,
-    f1_score,
-    hamming_loss,
-)
-
+import sklearn.metrics
 import xgboost as xgb
+import sentence_transformers
+import torch
 
 import util.io
 import util.preprocessing
 import util.classification
 
 
-EPOCHS = 100000
-EARLY_STOP_ROUNDS = 6
-MAX_FEATURES = 40000
+EPOCHS = 200000
+EARLY_STOP_ROUNDS = 10
 CTX_LENGTH_COMMENTS = 3
 N_JOBS = 32
+EMBED_MODEL_NAME = "all-MiniLM-L6-v2"
 
 
 def get_label_columns(df: pd.DataFrame) -> list[str]:
     return [x for x in df.columns if "." in x]
 
 
-def vectorize_text(train_texts, val_texts, test_texts=None):
-    print("Fitting TF-IDF vectorizer...")
-    vectorizer = TfidfVectorizer(max_features=MAX_FEATURES, ngram_range=(1, 2))
-    X_train = vectorizer.fit_transform(train_texts)
-    X_val = vectorizer.transform(val_texts)
-    X_test = (
-        vectorizer.transform(test_texts) if test_texts is not None else None
+def mean_pooling(model_output, attention_mask):
+    token_embeddings = model_output.last_hidden_state
+    input_mask_expanded = (
+        attention_mask.unsqueeze(-1).expand(token_embeddings.size()).float()
     )
-    return (
-        X_train,
-        X_val,
-        X_test,
-        vectorizer,
+    return torch.sum(token_embeddings * input_mask_expanded, 1) / torch.clamp(
+        input_mask_expanded.sum(1), min=1e-9
     )
+
+
+def embed_texts(texts, tokenizer, model, batch_size=8, device="cuda"):
+    model.to(device)
+    all_embeddings = []
+
+    for i in tqdm(range(0, len(texts), batch_size), desc="Embedding texts"):
+        batch_texts = texts[i: i + batch_size]
+
+        # Tokenize on CPU
+        encoded = tokenizer(
+            batch_texts,
+            padding=True,
+            truncation=True,
+            return_tensors="pt",
+            max_length=512,
+        )
+
+        # Move only required tensors to CUDA
+        encoded = {k: v.to(device) for k, v in encoded.items()}
+
+        with torch.no_grad():
+            model_output = model(**encoded)
+            batch_embeds = mean_pooling(
+                model_output, encoded["attention_mask"]
+            )
+            batch_embeds = torch.nn.functional.normalize(
+                batch_embeds, p=2, dim=1
+            )
+
+        # Move results back to CPU immediately
+        all_embeddings.append(batch_embeds.cpu().numpy())
+
+        # Clear CUDA cache to free memory
+        del encoded, model_output, batch_embeds
+        torch.cuda.empty_cache()
+
+    return np.vstack(all_embeddings)
+
+
+def vectorize_text(train_texts, val_texts, test_texts=None, batch_size=32):
+    print(f"Loading embedding model: {EMBED_MODEL_NAME}")
+    model = sentence_transformers.SentenceTransformer(EMBED_MODEL_NAME)
+
+    print("Embedding training texts...")
+    X_train = model.encode(
+        train_texts,
+        batch_size=batch_size,
+        convert_to_numpy=True,
+        show_progress_bar=True,
+    )
+
+    print("Embedding validation texts...")
+    X_val = model.encode(
+        val_texts,
+        batch_size=batch_size,
+        convert_to_numpy=True,
+        show_progress_bar=True,
+    )
+
+    X_test = None
+    if test_texts is not None:
+        print("Embedding test texts...")
+        X_test = model.encode(
+            test_texts,
+            batch_size=batch_size,
+            convert_to_numpy=True,
+            show_progress_bar=True,
+        )
+
+    return X_train, X_val, X_test
 
 
 def train_xgb_models(
@@ -63,13 +122,13 @@ def train_xgb_models(
             scale_pos_weight=pos_weight,
             n_estimators=EPOCHS,
             learning_rate=0.05,
-            max_depth=5,
+            max_depth=7,
             subsample=0.8,
             colsample_bytree=0.8,
             tree_method="hist",
             random_state=util.classification.SEED,
             early_stopping_rounds=EARLY_STOP_ROUNDS,
-            n_jobs=N_JOBS
+            n_jobs=N_JOBS,
         )
         model.fit(
             X_train,
@@ -101,41 +160,49 @@ def evaluate_xgb_models(models, X_test, y_test, label_names):
         results.append(
             {
                 "label": name,
-                "accuracy": accuracy_score(labels[:, i], preds[:, i]),
-                "precision": precision_score(
+                "accuracy": sklearn.metrics.accuracy_score(
+                    labels[:, i], preds[:, i]
+                ),
+                "precision": sklearn.metrics.precision_score(
                     labels[:, i], preds[:, i], zero_division=0
                 ),
-                "recall": recall_score(
+                "recall": sklearn.metrics.recall_score(
                     labels[:, i], preds[:, i], zero_division=0
                 ),
-                "f1": f1_score(labels[:, i], preds[:, i], zero_division=0),
+                "f1": sklearn.metrics.f1_score(
+                    labels[:, i], preds[:, i], zero_division=0
+                ),
             }
         )
 
     results.append(
         {
             "label": "micro_avg",
-            "accuracy": 1 - hamming_loss(labels, preds),
-            "precision": precision_score(
+            "accuracy": 1 - sklearn.metrics.hamming_loss(labels, preds),
+            "precision": sklearn.metrics.precision_score(
                 labels, preds, average="micro", zero_division=0
             ),
-            "recall": recall_score(
+            "recall": sklearn.metrics.recall_score(
                 labels, preds, average="micro", zero_division=0
             ),
-            "f1": f1_score(labels, preds, average="micro", zero_division=0),
+            "f1": sklearn.metrics.f1_score(
+                labels, preds, average="micro", zero_division=0
+            ),
         }
     )
     results.append(
         {
             "label": "macro_avg",
-            "accuracy": 1 - hamming_loss(labels, preds),
-            "precision": precision_score(
+            "accuracy": 1 - sklearn.metrics.hamming_loss(labels, preds),
+            "precision": sklearn.metrics.precision_score(
                 labels, preds, average="macro", zero_division=0
             ),
-            "recall": recall_score(
+            "recall": sklearn.metrics.recall_score(
                 labels, preds, average="macro", zero_division=0
             ),
-            "f1": f1_score(labels, preds, average="macro", zero_division=0),
+            "f1": sklearn.metrics.f1_score(
+                labels, preds, average="macro", zero_division=0
+            ),
         }
     )
 
@@ -150,7 +217,7 @@ def train_pipeline(target_df: pd.DataFrame, output_dir: Path, logs_dir: Path):
         target_df, train_percent=0.7, validate_percent=0.2
     )
 
-    X_train, X_val, X_test, vectorizer = vectorize_text(
+    X_train, X_val, X_test = vectorize_text(
         train_df["text"].tolist(),
         val_df["text"].tolist(),
         test_df["text"].tolist(),
@@ -163,9 +230,6 @@ def train_pipeline(target_df: pd.DataFrame, output_dir: Path, logs_dir: Path):
     models = train_xgb_models(
         X_train, y_train, X_val, y_val, label_names, output_dir
     )
-
-    print("Saving TF-IDF vectorizer...")
-    joblib.dump(vectorizer, output_dir / "tfidf_vectorizer.joblib")
 
     print("Evaluating models...")
     res_df = evaluate_xgb_models(models, X_test, y_test, label_names)
@@ -181,7 +245,6 @@ def main(args):
 
     util.classification.set_seed(util.classification.SEED)
 
-    # ================ Dataset preprocessing ================
     df = util.io.progress_load_csv(dataset_path)
     df = util.classification.preprocess_dataset(df)
     mod_df = df[df.is_moderator == 1]
@@ -198,7 +261,7 @@ def main(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
-        description="XGBoost multi-label classifier"
+        description="XGBoost multi-label classifier with Qwen embeddings"
     )
     parser.add_argument(
         "--dataset_path",
