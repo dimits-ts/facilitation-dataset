@@ -2,6 +2,7 @@ from pathlib import Path
 import argparse
 
 import pandas as pd
+import numpy as np
 import torch
 import transformers
 import sklearn.metrics
@@ -98,10 +99,67 @@ def test_model(
     label_column: str,
 ) -> pd.DataFrame:
     """
-    Evaluate best checkpoint on each dataset and on the full test split.
-    Returns a DataFrame indexed by dataset name with columns:
-    loss, accuracy, f1
+    Single-pass evaluation: runs inference once on the full test set,
+    computes per-dataset and overall metrics.
     """
+
+    best_model_dir = output_dir / "best_model"
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        best_model_dir,
+        num_labels=1,
+        problem_type="multi_label_classification",
+    )
+
+    # Full test dataset (single pass)
+    full_ds = util.classification.DiscussionDataset(
+        full_df=full_df.reset_index(drop=True),
+        target_df=test_df.reset_index(drop=True),
+        tokenizer=tokenizer,
+        max_length=MAX_LENGTH,
+        label_column=label_column,
+        max_context_turns=CTX_LENGTH_COMMENTS,
+    )
+
+    logits, labels = collect_logits_and_labels(model, full_ds, tokenizer)
+
+    # attach predictions
+    df_eval = test_df.copy()
+    df_eval["logit"] = logits
+    df_eval["pred"] = (df_eval["logit"] >= 0.5).astype(int)
+
+    # compute per-dataset
+    rows = []
+    for name, group in df_eval.groupby("dataset"):
+        rows.append(
+            {
+                "dataset": name,
+                "loss": sklearn.metrics.log_loss(
+                    group[label_column], group["logit"]
+                ),
+                "accuracy": sklearn.metrics.accuracy_score(
+                    group[label_column], group["pred"]
+                ),
+                "f1": sklearn.metrics.f1_score(
+                    group[label_column], group["pred"]
+                ),
+            }
+        )
+
+    # compute global stats
+    rows.append(
+        {
+            "dataset": "all",
+            "loss": sklearn.metrics.log_loss(labels, logits),
+            "accuracy": sklearn.metrics.accuracy_score(
+                labels, (logits >= 0.5).astype(int)
+            ),
+            "f1": sklearn.metrics.f1_score(
+                labels, (logits >= 0.5).astype(int)
+            ),
+        }
+    )
+
+    return pd.DataFrame(rows).set_index("dataset")
 
     # ── load checkpoint ────────────────────────────────────────────────────
     best_model_dir = output_dir / "best_model"
@@ -133,7 +191,7 @@ def test_model(
         max_context_turns=CTX_LENGTH_COMMENTS,
     )
     trainer = util.classification.BucketedTrainer(
-        bucket_batch_size=BATCH_SIZE//2, # idk why this is neccessary
+        bucket_batch_size=BATCH_SIZE // 2,  # idk why this is neccessary
         pos_weight=1.0,  # not used in eval mode
         model=model,
         args=transformers.TrainingArguments(
@@ -145,7 +203,7 @@ def test_model(
         train_dataset=None,
         eval_dataset=None,
         compute_metrics=util.classification.compute_metrics,
-        data_collator=lambda b: collate_fn(tokenizer, b)
+        data_collator=lambda b: collate_fn(tokenizer, b),
     )
 
     individual_raw = trainer.evaluate(eval_dataset=eval_dict)
@@ -158,50 +216,17 @@ def test_model(
     return res_df
 
 
-def precision_recall_table(
-    model_dir: Path,
-    dataset: torch.utils.data.Dataset,
-    tokenizer,
+def precision_recall_table_from_logits(
+    logits: np.ndarray,
+    labels: np.ndarray,
     thresholds: list[float],
-):
-    model = transformers.AutoModelForSequenceClassification.from_pretrained(
-        model_dir,
-        num_labels=1,
-        problem_type="multi_label_classification",
-    )
-    model.eval()
-    model.to("cuda" if torch.cuda.is_available() else "cpu")
-
-    dataloader = torch.utils.data.DataLoader(
-        dataset,
-        batch_size=BATCH_SIZE,
-        collate_fn=lambda b: collate_fn(tokenizer, b),
-        shuffle=False,
-        num_workers=4,
-        pin_memory=torch.cuda.is_available(),
-    )
-
-    all_logits = []
-    all_labels = []
-    with torch.no_grad():
-        for batch in dataloader:
-            labels = batch["labels"]
-            inputs = {
-                k: v.to(model.device)
-                for k, v in batch.items()
-                if k != "labels"
-            }
-            outputs = model(**inputs)
-            logits = outputs.logits.squeeze(-1).cpu()
-            all_logits.extend(torch.sigmoid(logits).numpy())
-            all_labels.extend(labels.squeeze(-1).cpu().numpy())
-
+) -> pd.DataFrame:
     data = []
     for t in thresholds:
-        preds = [1 if p >= t else 0 for p in all_logits]
+        preds = (logits >= t).astype(int)
         precision, recall, f1, _ = (
             sklearn.metrics.precision_recall_fscore_support(
-                all_labels, preds, average="binary", zero_division=0
+                labels, preds, average="binary", zero_division=0
             )
         )
         data.append(
@@ -212,9 +237,7 @@ def precision_recall_table(
                 "f1": f1,
             }
         )
-
-    df = pd.DataFrame(data).round(4)
-    return df
+    return pd.DataFrame(data).round(4)
 
 
 def collate_fn(tokenizer, batch: list[dict[str, str | float]]):
@@ -230,6 +253,38 @@ def collate_fn(tokenizer, batch: list[dict[str, str | float]]):
     )
     enc["labels"] = labels
     return enc
+
+
+def collect_logits_and_labels(model, dataset, tokenizer):
+    dataloader = torch.utils.data.DataLoader(
+        dataset,
+        batch_size=BATCH_SIZE,
+        collate_fn=lambda b: collate_fn(tokenizer, b),
+        shuffle=False,
+        num_workers=4,
+        pin_memory=torch.cuda.is_available(),
+    )
+
+    model.eval()
+    model.to("cuda" if torch.cuda.is_available() else "cpu")
+
+    all_logits, all_labels = [], []
+    with torch.no_grad():
+        for batch in dataloader:
+            labels = batch["labels"].squeeze(-1).cpu()
+            inputs = {
+                k: v.to(model.device)
+                for k, v in batch.items()
+                if k != "labels"
+            }
+            outputs = model(**inputs)
+            logits = outputs.logits.squeeze(-1).cpu()
+            all_logits.append(torch.sigmoid(logits))
+            all_labels.append(labels)
+
+    logits = torch.cat(all_logits).numpy()
+    labels = torch.cat(all_labels).numpy()
+    return logits, labels
 
 
 def main(args) -> None:
@@ -290,6 +345,7 @@ def main(args) -> None:
         )
 
     print("Testing...")
+    res_path = logs_dir / "pr_curves.csv"
     res_df = test_model(
         output_dir=output_dir,
         full_df=df,
@@ -297,20 +353,19 @@ def main(args) -> None:
         tokenizer=tokenizer,
         label_column=target_label,
     )
-
     print("\n=== Results ===")
     print(res_df)
-    logs_path = logs_dir / "res.csv"
-    res_df.to_csv(logs_path)
-    print(f"Results saved to {logs_path}")
 
-    print("\n=== PR-curves ===")
+    # reuse logits for PR table
     best_model_dir = output_dir / "best_model"
-    res_path = logs_dir / "pr_curves.csv"
-    pr_df = precision_recall_table(
-        model_dir=best_model_dir,
-        dataset=val_dataset,
-        tokenizer=tokenizer,
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        best_model_dir
+    )
+    logits, labels = collect_logits_and_labels(model, val_dataset, tokenizer)
+
+    pr_df = precision_recall_table_from_logits(
+        logits,
+        labels,
         thresholds=[
             round(t, 2) for t in list(torch.linspace(0.0, 1.0, 21).numpy())
         ],
