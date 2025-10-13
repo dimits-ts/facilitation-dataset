@@ -146,8 +146,7 @@ def test_model(
         train_dataset=None,
         eval_dataset=None,
         compute_metrics=util.classification.compute_metrics,
-        data_collator=lambda b: collate_fn(tokenizer, b),
-        device="cuda",
+        data_collator=lambda b: collate_fn(tokenizer, b)
     )
 
     individual_raw = trainer.evaluate(eval_dataset=eval_dict)
@@ -256,8 +255,8 @@ def main(args) -> None:
     train_df, val_df, test_df = util.classification.train_validate_test_split(
         df,
         stratify_col=target_label,
-        train_percent=0.7,
-        validate_percent=0.2,
+        train_percent=0.8,
+        validate_percent=0.1,
     )
     tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
 
@@ -294,6 +293,7 @@ def main(args) -> None:
     print("Testing...")
     res_df = test_model(
         output_dir=output_dir,
+        full_df=df,
         test_df=test_df,
         tokenizer=tokenizer,
         label_column=target_label,
