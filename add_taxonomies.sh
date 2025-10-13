@@ -19,7 +19,11 @@ python scripts/taxonomy_train.py \
     --logs_dir=logs/taxonomies_training/whow \
     --sub_dataset_name=whow
 
-
-python scripts/taxonomy_inference.py --model_dir=checkpoints/taxonomies --dataset_path=pefk.csv --labels_dir=taxonomies/output --output_csv=output_datasets/taxonomies.csv --mod_probability_path=output_datasets/pefk_mod.csv
+python scripts/taxonomy_inference.py \
+    --model_dir=checkpoints/taxonomies \
+    --dataset_path=pefk.csv \
+    --labels_dir=taxonomies/output \
+    --output_csv=output_datasets/taxonomies.csv \
+    --mod_probability_path=output_datasets/pefk_mod.csv
 
 python scripts/taxonomy_analysis.py --res_csv_path=logs/taxonomies_training/res.csv --graphs_dir=graphs --dataset_path=pefk.csv --label_dir=taxonomies/output

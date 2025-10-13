@@ -104,7 +104,7 @@ def infer_and_append(
         offset = 0
         for batch in tqdm(dataloader, desc="Running inference", leave=False):
             probs = _infer(model, device, batch)
-            df_batch = dataset.df.iloc[offset:offset + len(probs)].copy()
+            df_batch = dataset.df.iloc[offset: offset + len(probs)].copy()
             df_batch[output_column_name] = probs
             df_batch = df_batch.loc[:, ["message_id", output_column_name]]
             write_queue.put(df_batch)
@@ -147,9 +147,10 @@ def main(args: argparse.Namespace) -> None:
 
     print("Creating dataset...")
     dataset = util.classification.DiscussionDataset(
-        df,
-        tokenizer,
-        MAX_LENGTH,
+        full_df=df,
+        target_df=df,
+        tokenizer=tokenizer,
+        max_length=MAX_LENGTH,
         label_column="dummy_col",
         max_context_turns=CTX_LENGTH_COMMENTS,
     )

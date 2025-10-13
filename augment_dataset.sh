@@ -1,18 +1,21 @@
 #!/bin/bash
 LOG_FILE="logs/pefk_augmented.log"
+touch $LOG_FILE
 
 echo "Training moderation detection model..."
 python scripts/facilitation_train.py \
-    --output_dir=checkpoints/mod/all \
-    --logs_dir=logs/mod/all \
+    --output_dir=checkpoints/mod \
+    --logs_dir=logs/mod \
     --dataset_path=pefk.csv \
-    --datasets=ceri,fora,wikitactics,whow,umod,iq2 | tee "../$LOG_FILE"
+    --datasets=ceri,fora,wikitactics,whow,umod,iq2 | tee "$LOG_FILE"
 
 echo "Detecting moderator comments in dataset..."
 python scripts/facilitation_inference.py \
-        --model_dir checkpoints/mod/all/best_model \
+        --model_dir=checkpoints/mod \
         --source_dataset_path=pefk.csv \
-        --destination_dataset_path=output_datasets/pefk_mod.csv | tee "../$LOG_FILE"
+        --output_column_name=mod_probabilities \
+        --destination_dataset_path=output_datasets/pefk_mod.csv \
+        | tee "$LOG_FILE"
 
 echo "Starting analysis..."
 python scripts/facilitation_analysis.py \
