@@ -14,6 +14,9 @@ import util.classification
 
 
 NUM_SAMPLES_SHAP = 500
+MAX_CONTEXT_TURNS = 2
+MAX_LENGTH = 4096
+LABEL_COLUMN = "is_moderator"
 
 
 def collate_fn(tokenizer, batch):
@@ -149,32 +152,7 @@ def augmented_moderation_plot(
     plt.close()
 
 
-def explain_model(
-    model_dir: Path,
-    test_df: pd.DataFrame,
-    full_df: pd.DataFrame,
-    label_column: str,
-    graph_dir: Path,
-    max_length: int = 512,
-    max_context_turns: int = 2,
-) -> None:
-    """
-    Generate SHAP explanations for a sample of the test set and save them as
-    HTML. Uses DiscussionDataset to construct text sequences with context.
-    """
-
-    print("Building test dataset for SHAP explanation...")
-    texts = _get_classification_texts(
-        model_dir,
-        test_df,
-        full_df,
-        max_length,
-        label_column,
-        max_context_turns,
-    )
-
-    print(f"Explaining {len(texts)} examples...")
-
+def _get_explainer(model_dir: Path, max_length: int):
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
         model_dir, reference_compile=False, attn_implementation="eager"
     )
@@ -191,6 +169,21 @@ def explain_model(
     pmodel = shap.models.TransformersPipeline(pipe, rescale_to_logits=True)
     masker = shap.maskers.Text(tokenizer, mask_token="[MASK]")
     explainer = shap.Explainer(pmodel, masker)
+    return explainer
+
+
+def explain_model_global(
+    explainer,
+    texts: list[str],
+    graph_dir: Path,
+    max_length: int = 512,
+) -> None:
+    """
+    Generate SHAP explanations for a sample of the test set and save them as
+    HTML. Uses DiscussionDataset to construct text sequences with context.
+    """
+    print(f"Explaining {len(texts)} examples...")
+
     shap_values = explainer(texts)
     plot_data = shap_values[:, :, -1]
 
@@ -204,6 +197,9 @@ def explain_model(
     plt.tight_layout()
     util.io.save_plot(graph_dir / "shap_global_bar_plot.png")
     plt.close()
+
+
+def explain_model_local(explainer, text: str, graph_dir: Path): ...
 
 
 def main(args):
@@ -226,18 +222,30 @@ def main(args):
     classification_df = util.classification.preprocess_dataset(df)
     _, _, test_df = util.classification.train_validate_test_split(
         classification_df,
-        stratify_col="is_moderator",  # or "should_intervene"
+        straglobal_tify_col="is_moderator",  # or "should_intervene"
         train_percent=0.7,
         validate_percent=0.2,
     )
-    explain_model(
-        model_dir=model_dir / "best_model",
-        test_df=test_df.sample(n=NUM_SAMPLES_SHAP, random_state=42),
-        full_df=classification_df,
-        label_column="is_moderator",  # or "should_intervene"
+    test_df = test_df.sample(n=NUM_SAMPLES_SHAP, random_state=42)
+
+    print("Building explainer for SHAP explanation...")
+    explainer = _get_explainer(model_dir=model_dir, max_length=MAX_LENGTH)
+
+    print("Building test dataset for SHAP explanation...")
+    texts = _get_classification_texts(
+        model_dir=model_dir,
+        test_df=test_df,
+        full_df=df,
+        max_length=MAX_LENGTH,
+        label_column=LABEL_COLUMN,
+        max_context_turns=MAX_CONTEXT_TURNS,
+    )
+
+    explain_model_global(
+        explainer=explainer,
+        texts=texts,
         graph_dir=graph_dir,
-        max_length=8192,
-        max_context_turns=4,
+        max_length=MAX_LENGTH,
     )
     print("Done.")
 
