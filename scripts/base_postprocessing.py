@@ -7,7 +7,6 @@ import util.preprocessing
 
 INPUT_DIR = Path("../datasets")
 OUTPUT_PATH = Path("../pefk.csv")
-MAX_LENGTH_WORDS = 1000
 
 
 def get_unified_dataset(input_dir: Path) -> pd.DataFrame:
@@ -78,27 +77,6 @@ def discard_empty_comments(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def truncate_long_comments(
-    df: pd.DataFrame, max_length_words: int
-) -> pd.DataFrame:
-    print(f"Truncating extremely long comments (>{max_length_words} words)...")
-    initial_size = len(df)
-    df["text"] = df["text"].progress_apply(
-        lambda x: _truncate_text(x, max_length_words)
-    )
-
-    num_truncated = sum(df["text"].str.endswith(" [...]"))
-    print(f"Truncated {num_truncated} long comments (out of {initial_size}).")
-    return df
-
-
-def _truncate_text(text: str, max_length_words: int) -> str:
-    words = text.split()
-    if len(words) > max_length_words:
-        return " ".join(words[:max_length_words]) + " [...]"
-    return text
-
-
 def discard_nan_comments(df: pd.DataFrame) -> pd.DataFrame:
     print("Removing NaN comments...")
     initial_size = len(df)
@@ -132,7 +110,6 @@ def main():
             duplicate_dataset="wikiconv",
         )
 
-    df = truncate_long_comments(df, max_length_words=MAX_LENGTH_WORDS)
     df = discard_empty_comments(df)
     df = discard_nan_comments(df)
     df = discard_one_man_convs(df)
