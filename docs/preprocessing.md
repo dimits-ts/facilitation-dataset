@@ -22,10 +22,8 @@ We infer facilitative actions by whether the comment belongs in any of the follo
 - Providing clarification
 - Suggesting a compromise
 - Contextualisation
-- DH6: Refutation of opponent's argument (with evidence or reasoning)
-- DH5: Counterargument with new evidence / reasoning
-- DH7: Refuting the central point
 
+The above tactics are a subset of the Coordinative labels used in the WikiTactics paper. They were selected because they are not used neccesarily on 1-1 discussions; they could reasonably be applied by third-party participants. Contrast them with other Coordinative labels such as "Conceding/recanting" and "I don't know".
 
 ### Wikidisputes
 Since only 0.03% of the comments in the dataset are made by moderators, we mark the dataset as not supporting moderation.
