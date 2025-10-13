@@ -107,11 +107,10 @@ def test_model(
     best_model_dir = output_dir / "best_model"
     model = transformers.AutoModelForSequenceClassification.from_pretrained(
         best_model_dir,
-        reference_compile=False,
-        attn_implementation="eager",
         num_labels=1,
         problem_type="multi_label_classification",
     )
+    model.eval()
 
     # ── build eval datasets dict ─────────────────────────────────────────────
     def make_ds(df):
@@ -134,7 +133,7 @@ def test_model(
         max_context_turns=CTX_LENGTH_COMMENTS,
     )
     trainer = util.classification.BucketedTrainer(
-        bucket_batch_size=BATCH_SIZE,
+        bucket_batch_size=BATCH_SIZE//2, # idk why this is neccessary
         pos_weight=1.0,  # not used in eval mode
         model=model,
         args=transformers.TrainingArguments(
