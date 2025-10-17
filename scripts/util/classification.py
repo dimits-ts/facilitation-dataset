@@ -131,19 +131,14 @@ class DiscussionDataset(torch.utils.data.Dataset):
             truncation=True,
             max_length=self.max_length,
         )
-        remaining_tokens = self.max_length - len(encoded)
-        if remaining_tokens <= 0:
-            return target  # Target alone fills or exceeds the limit
 
         # Now add context incrementally from most recent to oldest
         context = []
         current_id = target_row["reply_to"]
         turns = 0
-
         while (
             pd.notna(current_id)
             and turns < self.max_context_turns
-            and remaining_tokens > 0
         ):
             row = self._id2row.get(current_id)
             if not row:
@@ -155,13 +150,6 @@ class DiscussionDataset(torch.utils.data.Dataset):
                 add_special_tokens=False,
                 truncation=False,
             )
-
-            if len(tokenized) <= remaining_tokens:
-                context.insert(0, turn)  # prepend newer context
-                remaining_tokens -= len(tokenized)
-            else:
-                break  # adding this turn would exceed the limit
-
             current_id = row["reply_to"]
             turns += 1
 
@@ -218,6 +206,7 @@ class WeightedLossTrainer(transformers.Trainer):
         outputs = model(**inputs)
         logits = outputs.get("logits")  # shape: (batch_size, num_labels)
 
+        # BCEWithLogitsLoss supports per-label pos_weight
         loss_fct = torch.nn.BCEWithLogitsLoss(
             pos_weight=(
                 None
@@ -225,9 +214,7 @@ class WeightedLossTrainer(transformers.Trainer):
                 else self.pos_weight.to(logits.device)
             )
         )
-        loss = loss_fct(
-            logits, labels
-        )  # BCEWithLogitsLoss supports per-label pos_weight
+        loss = loss_fct(logits, labels)
 
         return (loss, outputs) if return_outputs else loss
 

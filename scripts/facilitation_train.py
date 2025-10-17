@@ -6,21 +6,22 @@ import numpy as np
 import torch
 import transformers
 import sklearn.metrics
+from tqdm.auto import tqdm
 
 import util.classification
 import util.io
 
 
-EVAL_STEPS = 3000
-EPOCHS = 200
-MAX_LENGTH = 4096
-BATCH_SIZE = 42
-EARLY_STOP_WARMUP = 0
-EARLY_STOP_THRESHOLD = 0.001
-EARLY_STOP_PATIENCE = 8
+EVAL_STEPS = 3500
+EPOCHS = 120
+MAX_LENGTH = 8192
+BATCH_SIZE = 24
+EARLY_STOP_WARMUP = 4
+EARLY_STOP_THRESHOLD = 0.01
+EARLY_STOP_PATIENCE = 4
 FINETUNE_ONLY_HEAD = True
 TEST_METRICS = {"loss", "accuracy", "f1"}
-CTX_LENGTH_COMMENTS = 4
+CTX_LENGTH_COMMENTS = 2
 MODEL = "answerdotai/ModernBERT-large"
 
 
@@ -92,10 +93,11 @@ def train_model(
 
 
 def test_model(
+    model,
+    tokenizer: transformers.PreTrainedTokenizerBase,
     output_dir: Path,
     test_df: pd.DataFrame,
     full_df: pd.DataFrame,
-    tokenizer: transformers.PreTrainedTokenizerBase,
     label_column: str,
 ) -> pd.DataFrame:
     """
@@ -120,100 +122,9 @@ def test_model(
         max_context_turns=CTX_LENGTH_COMMENTS,
     )
 
-    logits, labels = collect_logits_and_labels(model, full_ds, tokenizer)
+    logits, labels = _collect_logits_and_labels(model, full_ds, tokenizer)
 
-    # attach predictions
-    df_eval = test_df.copy()
-    df_eval["logit"] = logits
-    df_eval["pred"] = (df_eval["logit"] >= 0.5).astype(int)
-
-    # compute per-dataset
-    rows = []
-    for name, group in df_eval.groupby("dataset"):
-        rows.append(
-            {
-                "dataset": name,
-                "loss": sklearn.metrics.log_loss(
-                    group[label_column], group["logit"]
-                ),
-                "accuracy": sklearn.metrics.accuracy_score(
-                    group[label_column], group["pred"]
-                ),
-                "f1": sklearn.metrics.f1_score(
-                    group[label_column], group["pred"]
-                ),
-            }
-        )
-
-    # compute global stats
-    rows.append(
-        {
-            "dataset": "all",
-            "loss": sklearn.metrics.log_loss(labels, logits),
-            "accuracy": sklearn.metrics.accuracy_score(
-                labels, (logits >= 0.5).astype(int)
-            ),
-            "f1": sklearn.metrics.f1_score(
-                labels, (logits >= 0.5).astype(int)
-            ),
-        }
-    )
-
-    return pd.DataFrame(rows).set_index("dataset")
-
-    # ── load checkpoint ────────────────────────────────────────────────────
-    best_model_dir = output_dir / "best_model"
-    model = transformers.AutoModelForSequenceClassification.from_pretrained(
-        best_model_dir,
-        num_labels=1,
-        problem_type="multi_label_classification",
-    )
-    model.eval()
-
-    # ── build eval datasets dict ─────────────────────────────────────────────
-    def make_ds(df):
-        return util.classification.DiscussionDataset(
-            full_df=full_df.reset_index(drop=True),
-            target_df=df.reset_index(drop=True),
-            tokenizer=tokenizer,
-            max_length=MAX_LENGTH,
-            label_column=label_column,
-            max_context_turns=CTX_LENGTH_COMMENTS,
-        )
-
-    eval_dict = {name: make_ds(df) for name, df in test_df.groupby("dataset")}
-    full_ds = util.classification.DiscussionDataset(
-        full_df=full_df.reset_index(drop=True),
-        target_df=test_df.reset_index(drop=True),
-        tokenizer=tokenizer,
-        max_length=MAX_LENGTH,
-        label_column=label_column,
-        max_context_turns=CTX_LENGTH_COMMENTS,
-    )
-    trainer = util.classification.BucketedTrainer(
-        bucket_batch_size=BATCH_SIZE // 2,  # idk why this is neccessary
-        pos_weight=1.0,  # not used in eval mode
-        model=model,
-        args=transformers.TrainingArguments(
-            output_dir=output_dir / "eval",
-            do_train=False,
-            per_device_eval_batch_size=BATCH_SIZE,
-            disable_tqdm=True,
-        ),
-        train_dataset=None,
-        eval_dataset=None,
-        compute_metrics=util.classification.compute_metrics,
-        data_collator=lambda b: collate_fn(tokenizer, b),
-    )
-
-    individual_raw = trainer.evaluate(eval_dataset=eval_dict)
-    all_raw = trainer.evaluate(eval_dataset=full_ds)
-    res_df = util.classification.results_to_df(
-        individual_raw=individual_raw,
-        all_raw=all_raw,
-        test_metrics=TEST_METRICS,
-    )
-    return res_df
+    return logits, labels
 
 
 def precision_recall_table_from_logits(
@@ -255,7 +166,50 @@ def collate_fn(tokenizer, batch: list[dict[str, str | float]]):
     return enc
 
 
-def collect_logits_and_labels(model, dataset, tokenizer):
+def res_df_from_logits_and_labels(
+    test_df, logits, labels, label_column: str
+) -> pd.DataFrame:
+    # attach predictions
+    df_eval = test_df.copy()
+    df_eval["logit"] = logits
+    df_eval["pred"] = (df_eval["logit"] >= 0.5).astype(int)
+
+    # compute per-dataset
+    rows = []
+    for name, group in df_eval.groupby("dataset"):
+        rows.append(
+            {
+                "dataset": name,
+                "loss": sklearn.metrics.log_loss(
+                    group[label_column], group["logit"]
+                ),
+                "accuracy": sklearn.metrics.accuracy_score(
+                    group[label_column], group["pred"]
+                ),
+                "f1": sklearn.metrics.f1_score(
+                    group[label_column], group["pred"]
+                ),
+            }
+        )
+
+    # compute global stats
+    rows.append(
+        {
+            "dataset": "all",
+            "loss": sklearn.metrics.log_loss(labels, logits),
+            "accuracy": sklearn.metrics.accuracy_score(
+                labels, (logits >= 0.5).astype(int)
+            ),
+            "f1": sklearn.metrics.f1_score(
+                labels, (logits >= 0.5).astype(int)
+            ),
+        }
+    )
+
+    return pd.DataFrame(rows).set_index("dataset")
+
+
+def _collect_logits_and_labels(model, dataset, tokenizer):
     dataloader = torch.utils.data.DataLoader(
         dataset,
         batch_size=BATCH_SIZE,
@@ -270,7 +224,7 @@ def collect_logits_and_labels(model, dataset, tokenizer):
 
     all_logits, all_labels = [], []
     with torch.no_grad():
-        for batch in dataloader:
+        for batch in tqdm(dataloader, desc="Test set"):
             labels = batch["labels"].squeeze(-1).cpu()
             inputs = {
                 k: v.to(model.device)
@@ -345,24 +299,31 @@ def main(args) -> None:
         )
 
     print("Testing...")
-    res_path = logs_dir / "pr_curves.csv"
-    res_df = test_model(
+    best_model_dir = output_dir / "best_model"
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        best_model_dir
+    )
+    logits, labels = test_model(
+        model=model,
         output_dir=output_dir,
         full_df=df,
         test_df=test_df,
         tokenizer=tokenizer,
         label_column=target_label,
     )
+
     print("\n=== Results ===")
+    res_path = logs_dir / "res_dataset.csv"
+    res_df = res_df_from_logits_and_labels(
+        test_df=test_df,
+        logits=logits,
+        labels=labels,
+        label_column=target_label,
+    )
     print(res_df)
 
     # reuse logits for PR table
-    best_model_dir = output_dir / "best_model"
-    model = transformers.AutoModelForSequenceClassification.from_pretrained(
-        best_model_dir
-    )
-    logits, labels = collect_logits_and_labels(model, val_dataset, tokenizer)
-
+    pr_path = logs_dir / "pr_curves.csv"
     pr_df = precision_recall_table_from_logits(
         logits,
         labels,
@@ -371,7 +332,8 @@ def main(args) -> None:
         ],
     )
     print(pr_df)
-    pr_df.to_csv(res_path, index=False)
+    pr_path = logs_dir / "pr_curves.csv"
+    pr_df.to_csv(pr_path, index=False)
     print(f"PR curves saved to {res_path}")
 
 
