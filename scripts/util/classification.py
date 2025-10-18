@@ -18,27 +18,27 @@ SEED = 42
 
 class DiscussionDataset(torch.utils.data.Dataset):
     """
-    A dataset class that dynamically creates sequences of target comment and N
-    previous comments as context. The resulting strings are in XML format where
-    <CTX> is a context comment, <USR> is the username, and <TGT> is the target
-    comment. Comments are added as context as long as the string would not be
-    truncated, preventing truncation of tags and target comment.
+    A dataset class that dynamically creates sequences of a target comment and N
+    previous comments as context. Each comment is wrapped in XML-style tags:
+    <CTX> for context, <USR> for username, and <TGT> for target.
+
+    Each individual comment (context or target) is truncated by character count
+    if it exceeds `max_length_chars`, ensuring tags remain intact.
     """
 
     def __init__(
         self,
-        target_df,
-        full_df,
+        target_df: pd.DataFrame,
+        full_df: pd.DataFrame,
         tokenizer,
-        max_length,
-        label_column,
+        max_length_chars: int, # max length of each comment before truncation
+        label_column: str,
         max_context_turns=4,
     ):
         self.df = target_df.reset_index(drop=True)
         self._id2row = full_df.set_index("message_id").to_dict("index")
         self.tokenizer = tokenizer
-        self.max_length = max_length
-        # Accept either a single label name or a list of label names
+        self.max_length_chars = max_length_chars
         self.label_column = label_column
         self.max_context_turns = max_context_turns
 
@@ -46,7 +46,7 @@ class DiscussionDataset(torch.utils.data.Dataset):
         self._reply_to = self.df["reply_to"].tolist()
         self._message_ids = self.df["message_id"].tolist()
 
-        # Handle multi-label or single-label
+        # Handle multi-label or single-label setup
         if isinstance(self.label_column, (list, tuple)):
             missing = [
                 c for c in self.label_column if c not in self.df.columns
@@ -67,7 +67,7 @@ class DiscussionDataset(torch.utils.data.Dataset):
             self._labels = self.df[self.label_column].astype(float).tolist()
             self._num_labels = 1
 
-        # estimate char lengths as before...
+        # Precompute approximate char lengths for bucketing
         self._lengths = []
         for idx in tqdm(
             range(len(self.df)),
@@ -77,21 +77,27 @@ class DiscussionDataset(torch.utils.data.Dataset):
             char_len = self._heuristic_char_length(idx)
             self._lengths.append(char_len)
 
+    def _truncate_text(self, text: str) -> str:
+        """
+        Truncate a comment by character count to fit within `max_length_chars`.
+        Tags are added outside the truncation, so this applies to the raw text only.
+        """
+        if len(text) <= self.max_length_chars:
+            return text
+        return text[
+            : self.max_length_chars
+        ].rstrip()  # cut and strip trailing whitespace
+
     def _heuristic_char_length(self, idx: int) -> int:
         """
         Returns an estimated character length of the context + target sequence
-        without tokenization. Includes tag and user string overhead.
+        without tokenization. Includes tag and user overhead.
         """
         total_chars = 0
         turns = 0
 
         target_row = self.df.iloc[idx]
-        tgt = (
-            "<TGT>"
-            f"<USR>{target_row['user']}</USR>"
-            f"{target_row['text']}"
-            "</TGT>"
-        )
+        tgt = f"<TGT><USR>{target_row['user']}</USR>{target_row['text']}</TGT>"
         total_chars += len(tgt)
 
         current_id = target_row["reply_to"]
@@ -99,7 +105,7 @@ class DiscussionDataset(torch.utils.data.Dataset):
             row = self._id2row.get(current_id)
             if not row:
                 break
-            ctx = f"<CTX> <USR>{row['user']}</USR> {row['text']} </CTX>"
+            ctx = f"<CTX><USR>{row['user']}</USR>{row['text']}</CTX>"
             total_chars += len(ctx)
             current_id = row["reply_to"]
             turns += 1
@@ -108,63 +114,33 @@ class DiscussionDataset(torch.utils.data.Dataset):
 
     def _build_sequence(self, idx: int) -> str:
         """
-        Dynamically generates the longest possible sequence of context
-        comments, up to the specified max_content_turns.
-        This means the actual target comment is always included,
-        and we avoid non-closing tags during truncation.
-
-        :param idx: _description_
-        :type idx: int
-        :return: _description_
-        :rtype: str
+        Builds a sequence of the target comment and up to `max_context_turns`
+        previous comments as context. Each individual comment text is truncated
+        to `max_length_chars` characters.
         """
         target_row = self.df.iloc[idx]
-        target = (
-            f"<TGT> <USR>{target_row['user']}</USR>"
-            f"{target_row['text']} </TGT>"
-        )
 
-        # Start with just the target and check its length
-        encoded = self.tokenizer.encode(
-            target,
-            add_special_tokens=True,
-            truncation=True,
-            max_length=self.max_length,
-        )
+        # Truncate target text
+        truncated_target_text = self._truncate_text(target_row["text"])
+        target = f"<TGT><USR>{target_row['user']}</USR>{truncated_target_text}</TGT>"
 
-        # Now add context incrementally from most recent to oldest
+        # Collect context comments (most recent first, then reversed)
         context = []
         current_id = target_row["reply_to"]
         turns = 0
-        while (
-            pd.notna(current_id)
-            and turns < self.max_context_turns
-        ):
+        while pd.notna(current_id) and turns < self.max_context_turns:
             row = self._id2row.get(current_id)
             if not row:
                 break
 
-            turn = f"<CTX> <USR>{row['user']}</USR> {row['text']} </CTX>"
-            tokenized = self.tokenizer.encode(
-                turn,
-                add_special_tokens=False,
-                truncation=False,
-            )
+            truncated_ctx_text = self._truncate_text(row["text"])
+            turn = f"<CTX><USR>{row['user']}</USR>{truncated_ctx_text}</CTX>"
+            context.insert(0, turn)  # prepend oldest first
+
             current_id = row["reply_to"]
             turns += 1
 
         return " ".join(context + [target])
-
-    def _tokenized_length(self, idx):
-        seq = self._build_sequence(idx)
-        return len(
-            self.tokenizer.encode(
-                seq,
-                add_special_tokens=True,
-                truncation=True,
-                max_length=self.max_length,
-            )
-        )
 
     def length(self, idx: int) -> int:
         return self._lengths[idx]
@@ -175,15 +151,13 @@ class DiscussionDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         text = self._build_sequence(idx)
         label = self._labels[idx]
-        # return torch tensor for labels (multi-label -> float vector)
         label_tensor = (
             torch.tensor(label, dtype=torch.float)
             if isinstance(label, (list, tuple))
             else torch.tensor([label], dtype=torch.float)
         )
-        # if you prefer single-dim scalar for single-label, you can do:
         if self._num_labels == 1:
-            label_tensor = label_tensor.squeeze(0)  # shape () scalar float
+            label_tensor = label_tensor.squeeze(0)
         return {"text": text, "label": label_tensor}
 
 
@@ -291,7 +265,7 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
     def __iter__(self):
         # -- bucketed indices, then shuffle buckets --
         batches = [
-            self.sorted_indices[i: i + self.batch_size]
+            self.sorted_indices[i : i + self.batch_size]
             for i in range(0, len(self.sorted_indices), self.batch_size)
         ]
         if self.drop_last and len(batches[-1]) < self.batch_size:

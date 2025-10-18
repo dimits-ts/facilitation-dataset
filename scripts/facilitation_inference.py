@@ -25,7 +25,8 @@ import util.io
 
 BATCH_SIZE = 3
 MAX_LENGTH = 8192
-CTX_LENGTH_COMMENTS = 4
+MAX_LENGTH_CHARS = 5000
+CTX_LENGTH_COMMENTS = 2
 
 
 def sort_dataset_by_tokenized_sequence_length(dataset):
@@ -43,7 +44,7 @@ def _build_dataloader(dataset, tokenizer) -> torch.utils.data.DataLoader:
         return tokenizer(
             texts,
             padding="longest",
-            truncation=True,
+            truncation=False,
             max_length=MAX_LENGTH,
             return_tensors="pt",
         )
@@ -150,7 +151,7 @@ def main(args: argparse.Namespace) -> None:
         full_df=df,
         target_df=df,
         tokenizer=tokenizer,
-        max_length=MAX_LENGTH,
+        max_length_chars=MAX_LENGTH_CHARS,
         label_column="dummy_col",
         max_context_turns=CTX_LENGTH_COMMENTS,
     )

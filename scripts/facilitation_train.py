@@ -12,10 +12,11 @@ import util.classification
 import util.io
 
 
-EVAL_STEPS = 3500
+EVAL_STEPS = 800
 EPOCHS = 120
 MAX_LENGTH = 8192
-BATCH_SIZE = 24
+MAX_LENGTH_CHARS = 5000
+BATCH_SIZE = 64
 EARLY_STOP_WARMUP = 4
 EARLY_STOP_THRESHOLD = 0.01
 EARLY_STOP_PATIENCE = 4
@@ -117,7 +118,7 @@ def test_model(
         full_df=full_df.reset_index(drop=True),
         target_df=test_df.reset_index(drop=True),
         tokenizer=tokenizer,
-        max_length=MAX_LENGTH,
+        max_length_chars=MAX_LENGTH_CHARS,
         label_column=label_column,
         max_context_turns=CTX_LENGTH_COMMENTS,
     )
@@ -272,7 +273,7 @@ def main(args) -> None:
         full_df=df,
         target_df=train_df,
         tokenizer=tokenizer,
-        max_length=MAX_LENGTH,
+        max_length_chars=MAX_LENGTH_CHARS,
         label_column=target_label,
         max_context_turns=CTX_LENGTH_COMMENTS,
     )
@@ -280,7 +281,7 @@ def main(args) -> None:
         full_df=df,
         target_df=val_df,
         tokenizer=tokenizer,
-        max_length=MAX_LENGTH,
+        max_length_chars=MAX_LENGTH_CHARS,
         label_column=target_label,
         max_context_turns=CTX_LENGTH_COMMENTS,
     )
