@@ -12,14 +12,12 @@ import util.classification
 import util.io
 
 
-EVAL_STEPS = 1500
-EPOCHS = 120
-MAX_LENGTH = 8192
+EPOCHS = 80
 MAX_LENGTH_CHARS = 5000
 BATCH_SIZE = 64
 EARLY_STOP_WARMUP = 4
-EARLY_STOP_THRESHOLD = 0.01
-EARLY_STOP_PATIENCE = 4
+EARLY_STOP_THRESHOLD = 0.001
+EARLY_STOP_PATIENCE = 6
 FINETUNE_ONLY_HEAD = True
 CTX_LENGTH_COMMENTS = 2
 MODEL = "answerdotai/ModernBERT-large"
@@ -53,17 +51,14 @@ def train_model(
         per_device_train_batch_size=BATCH_SIZE,
         per_device_eval_batch_size=BATCH_SIZE,
         num_train_epochs=EPOCHS,
-        eval_strategy="steps",
-        eval_steps=EVAL_STEPS,
-        save_strategy="steps",
-        save_steps=EVAL_STEPS,
-        logging_strategy="steps",
-        logging_dir=logs_dir,
-        logging_steps=EVAL_STEPS,
+        evaluation_strategy="epoch",
+        save_strategy="epoch",
+        logging_strategy="epoch",
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
         report_to="tensorboard",
+        logging_dir=logs_dir,
     )
 
     early_stopping = util.classification.EarlyStoppingWithWarmupStepsCallback(
@@ -159,7 +154,6 @@ def collate_fn(tokenizer, batch: list[dict[str, str | float]]):
         texts,
         padding="longest",
         truncation=False,
-        max_length=MAX_LENGTH,
         return_tensors="pt",
     )
     enc["labels"] = labels
