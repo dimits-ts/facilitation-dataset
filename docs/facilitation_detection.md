@@ -8,8 +8,8 @@ We use a maximum of 2 comments for each training sample, and each of these comme
 
 Example:
 ```
-<CRT> hello! <\CRT>
-<CRT> shut up no one loves you <\CRT>
+<CTX> hello! <\CTX>
+<CTX> shut up no one loves you <\CTX>
 <TRT> not cool man <\TRT>
 ```
 
