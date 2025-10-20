@@ -32,8 +32,6 @@ Since only 0.03% of the comments in the dataset are made by moderators, we mark 
 ### UMOD
 Facilitative actions are marked as a gradient from 0 (no facilitation) to 1 (full facilitation). We adopt a threshold of 0.75 to consider an action as facilitative, with more than 50% annotator agreement (measured as entropy in the original dataset).
 
-### IQ2
-We remove verbal linguistic markers ("...", "uh,").
 
 ### CMV-AWRY2
 We mark a discussion as escalated when the derailement value (from the official dataset) is in the 60th upper percentile.

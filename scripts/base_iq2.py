@@ -27,8 +27,6 @@ def main():
     df = json_to_df(contents)
     df = df.explode("paragraphs")
     df = df.reset_index()
-    df.paragraphs = df.paragraphs.str.replace("uh,", "")
-    df.paragraphs = df.paragraphs.str.replace("...", "")
 
     df["is_moderator"] = df.speakertype.apply(lambda x: x in ["mod", "host"])
     df["moderation_supported"] = True
