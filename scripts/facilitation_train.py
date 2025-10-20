@@ -172,7 +172,7 @@ def res_df_from_logits_and_labels(
     rows = []
     for name, group in df_eval.groupby("dataset"):
         precision, recall, f1, support = (
-            sklearn.metrics.precision_recall_support(
+            sklearn.metrics.precision_recall_fscore_support(
                 group[label_column],
                 group["pred"],
                 average="binary",
