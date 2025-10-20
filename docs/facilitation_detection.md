@@ -67,6 +67,11 @@ Inference code: [scripts/model_inference.py](scripts/model_inference.py). Note t
 
 ### Parameters
 
-We use the default pre-trained version of the ModernBERT model, with its weights frozen and a binary classification head. We use the default optimizer with Hugging Face Trainer's default parameters, but modify the BCE loss function to have a positive weight equal to the ratio of positive labels. We also use bucketing (creating batches with examples that have similar sizes) to increase efficiency.
+We use the default pre-trained version of the ModernBERT-large model, with its weights frozen and a binary classification head. We use the default optimizer with Hugging Face Trainer's default parameters, but modify the BCE loss function to have a positive weight equal to the ratio of positive labels. We also use bucketing (creating batches with examples that have similar sizes) to increase efficiency.
 
 During training, we use a batch size of 32, max sequence length of 8192, and pin all seeds to the number 42. We ran the models on 120 epochs with Early Stopping, with warmup of 12000 steps, delta=10e-5 and a patience of 5, with evaluation every 4000 steps. We select the best model according to the evaluation loss.
+
+
+### Notes
+
+In an earlier version of our experiments, we had accidentally considered argumentative tactics as facilitation in the WIkitactics dataset. When correcting this mistake, we noted a very large improvement in f1 scores (>0.1), meaning that the tactics we selected had much more in common with faciltiative comments from other datasets.
