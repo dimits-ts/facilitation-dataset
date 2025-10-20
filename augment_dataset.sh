@@ -5,9 +5,21 @@ touch $LOG_FILE
 echo "Training moderation detection model..."
 python scripts/facilitation_train.py \
     --output_dir=checkpoints/mod \
-    --logs_dir=logs/mod \
+    --logs_dir=logs/mod/all \
     --dataset_path=pefk.csv \
     --datasets=ceri,fora,wikitactics,whow,umod,iq2 | tee "$LOG_FILE"
+
+python scripts/facilitation_train.py \
+    --output_dir=checkpoints/mod/spoken \
+    --logs_dir=logs/mod/spoken \
+    --dataset_path=pefk.csv \
+    --datasets=fora,whow,iq2 | tee "$LOG_FILE"
+
+python scripts/facilitation_train.py \
+    --output_dir=checkpoints/mod/written \
+    --logs_dir=logs/mod/written \
+    --dataset_path=pefk.csv \
+    --datasets=ceri,wikitactics,umod | tee "$LOG_FILE"
 
 echo "Detecting moderator comments in dataset..."
 python scripts/facilitation_inference.py \
