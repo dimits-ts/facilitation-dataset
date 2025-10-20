@@ -51,7 +51,7 @@ def train_model(
         per_device_train_batch_size=BATCH_SIZE,
         per_device_eval_batch_size=BATCH_SIZE,
         num_train_epochs=EPOCHS,
-        evaluation_strategy="epoch",
+        eval_strategy="epoch",
         save_strategy="epoch",
         logging_strategy="epoch",
         load_best_model_at_end=True,
@@ -267,6 +267,13 @@ def main(args) -> None:
         label_column=target_label,
         max_context_turns=CTX_LENGTH_COMMENTS,
     )
+
+    print("DEBUG: Checking a few samples:")
+    for i in range(5):
+        ex = train_dataset[i]
+        print(f"\n--- Sample {i} ---")
+        print(ex["text"])
+        print(f"Label: {ex['label']}\n")
 
     if not only_test:
         print("Starting training...")

@@ -77,13 +77,6 @@ class DiscussionDataset(torch.utils.data.Dataset):
             char_len = self._heuristic_char_length(idx)
             self._lengths.append(char_len)
 
-        print("DEBUG: Checking a few samples:")
-        for i in range(5):
-            ex = self[i]
-            print(f"\n--- Sample {i} ---")
-            print(ex["text"])
-            print(f"Label: {ex['label']}\n")
-
     def _truncate_text(self, text: str) -> str:
         """
         Truncate a comment by character count to fit within `max_length_chars`.
