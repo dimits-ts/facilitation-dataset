@@ -2,13 +2,15 @@
 
 We use a [ModernBERT](https://arxiv.org/abs/2412.13663) model to estimate facilitative comments in the "Wikiconv", "Wikidisputes" and "Conversations Gone Awry" datasets, by using the labels provided by the rest of the datasets. The classifier is trained by the rest of the *non-synthetic* datasets.
 
-The comments are given to the model in XML format. We use the tags \<CTX\> for preceding comments (context), \<USR\> tags to denote the usernames who posted each comment, and \<TRT\> for the actual (target) comments to be classified. We use a maximum of 4 comments for each training sample, although this number is reduced should it not fit to the model's context window of 8192 tokens. We do not truncate the input. These tokens are not added to the tokenizer as special tokens, to keep implementation simple.
+The comments are given to the model in XML format. We use the tags \<CTX\> for preceding comments (context) and \<TRT\> for the actual (target) comments to be classified. These tokens are not added to the tokenizer as special tokens, to keep implementation simple.
+
+We use a maximum of 2 comments for each training sample, and each of these comments is truncated to 5000 characters (tags remain no matter what). We do not use information about users, since most usernames are hashed during dataset preprocessing.
 
 Example:
 ```
-<CRT> <USR> username1 </USR> hello! <\CRT>
-<CRT> <USR> username2 </USR> shut up no one loves you <\CRT>
-<TRT> <USR> mod </USR> not cool man <\TRT>
+<CRT> hello! <\CRT>
+<CRT> shut up no one loves you <\CRT>
+<TRT> not cool man <\TRT>
 ```
 
 ### Results (test set)

@@ -20,7 +20,7 @@ class DiscussionDataset(torch.utils.data.Dataset):
     """
     A dataset class that dynamically creates sequences of a target comment and
     N previous comments as context. Each comment is wrapped in XML-style tags:
-    <CTX> for context, <USR> for username, and <TGT> for target.
+    <CTX> for context, and <TGT> for target.
 
     Each individual comment (context or target) is truncated by character count
     if it exceeds `max_length_chars`, ensuring tags remain intact.
@@ -76,7 +76,7 @@ class DiscussionDataset(torch.utils.data.Dataset):
         ):
             char_len = self._heuristic_char_length(idx)
             self._lengths.append(char_len)
-        
+
         print("DEBUG: Checking a few samples:")
         for i in range(5):
             ex = self[i]
@@ -105,16 +105,14 @@ class DiscussionDataset(torch.utils.data.Dataset):
         turns = 0
 
         target_row = self.df.iloc[idx]
-        tgt = f"<TGT><USR>{target_row['user']}</USR>{target_row['text']}</TGT>"
-        total_chars += len(tgt)
+        total_chars += len(target_row["text"])
 
         current_id = target_row["reply_to"]
         while pd.notna(current_id) and turns < self.max_context_turns:
             row = self._id2row.get(current_id)
             if not row:
                 break
-            ctx = f"<CTX><USR>{row['user']}</USR>{row['text']}</CTX>"
-            total_chars += len(ctx)
+            total_chars += len(row["text"])
             current_id = row["reply_to"]
             turns += 1
 
@@ -130,10 +128,7 @@ class DiscussionDataset(torch.utils.data.Dataset):
 
         # Truncate target text
         truncated_target_text = self._truncate_text(target_row["text"])
-        target = (
-            f"<TGT><USR>{target_row['user']}</USR>"
-            f"{truncated_target_text}</TGT>"
-        )
+        target = f"<TGT>{truncated_target_text}</TGT>"
 
         # Collect context comments (most recent first, then reversed)
         context = []
@@ -145,7 +140,7 @@ class DiscussionDataset(torch.utils.data.Dataset):
                 break
 
             truncated_ctx_text = self._truncate_text(row["text"])
-            turn = f"<CTX><USR>{row['user']}</USR>{truncated_ctx_text}</CTX>"
+            turn = f"<CTX>{truncated_ctx_text}</CTX>"
             context.insert(0, turn)  # prepend oldest first
 
             current_id = row["reply_to"]
