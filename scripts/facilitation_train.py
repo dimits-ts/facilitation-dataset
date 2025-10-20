@@ -12,7 +12,7 @@ import util.classification
 import util.io
 
 
-EVAL_STEPS = 800
+EVAL_STEPS = 1500
 EPOCHS = 120
 MAX_LENGTH = 8192
 MAX_LENGTH_CHARS = 5000
@@ -21,7 +21,6 @@ EARLY_STOP_WARMUP = 4
 EARLY_STOP_THRESHOLD = 0.01
 EARLY_STOP_PATIENCE = 4
 FINETUNE_ONLY_HEAD = True
-TEST_METRICS = {"loss", "accuracy", "f1"}
 CTX_LENGTH_COMMENTS = 2
 MODEL = "answerdotai/ModernBERT-large"
 
@@ -314,7 +313,7 @@ def main(args) -> None:
     )
 
     print("\n=== Results ===")
-    res_path = logs_dir / "res_dataset.csv"
+    
     res_df = res_df_from_logits_and_labels(
         test_df=test_df,
         logits=logits,
@@ -322,8 +321,20 @@ def main(args) -> None:
         label_column=target_label,
     )
     print(res_df)
+    res_path = logs_dir / "res_dataset.csv"
+    res_df.to_csv(res_path, index=False)
+    print(f"Results per dataset saved to {res_path}.")
 
-    # reuse logits for PR table
+    # run pr curves on validation set since their results are used
+    # as parameters for the next stages
+    logits, labels = test_model(
+        model=model,
+        output_dir=output_dir,
+        full_df=df,
+        test_df=val_df,
+        tokenizer=tokenizer,
+        label_column=target_label,
+    )
     pr_path = logs_dir / "pr_curves.csv"
     pr_df = precision_recall_table_from_logits(
         logits,
@@ -335,7 +346,7 @@ def main(args) -> None:
     print(pr_df)
     pr_path = logs_dir / "pr_curves.csv"
     pr_df.to_csv(pr_path, index=False)
-    print(f"PR curves saved to {res_path}")
+    print(f"PR curves saved to {pr_path}.")
 
 
 if __name__ == "__main__":
