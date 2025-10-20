@@ -9,18 +9,18 @@ The dataset will be provided as a single file upon the completion of the project
 
 ## List of datasets used
 
-| Name                             | Size (#comments) | Domain         | Link                                                   |
-| -------------------------------- | ---------------- | -------------- | ------------------------------------------------------ |
-| WikiDisputes                     |96,320   | Forum | [Link](https://aclanthology.org/2021.eacl-main.173/)   |
-| WikiTactics                      | 3,850   | Forum | [Link](https://arxiv.org/abs/2212.08353)               |
-| WikiConv                         | 17,806,373   | Forum | [Link](https://aclanthology.org/D18-1305/)             |
-| Conversations Gone Awry / CMV II | 40,607  | Forum | [Link](https://arxiv.org/abs/1909.01362)               |
-| CeRI data                        | 3,700   | Forum | [Link](https://dl.acm.org/doi/10.1145/2307729.2307757) |
-| User Moderation (UMOD)           | 2,000   | Forum | [Link](https://aclanthology.org/2024.eacl-long.60/)    |
-| Virtual Moderation Dataset (VMD) | 3,563   | Forum | [Link](https://arxiv.org/abs/2503.16505)               |
-| Intelligence Squared 2 (IQ2)     | 34,245   | Real-life (Debate) | [Link](https://aclanthology.org/N16-1017/)             |
-| Why How Who (WHoW)               | 25,542   | Radio / TV | [Link](https://aclanthology.org/2025.naacl-long.105/)  |
-| Fora                             | 39,438   | Real-life (Deliberative) | [Link](https://aclanthology.org/2024.acl-long.754/)    |
+| Name                             | Size (#comments) | Domain                   | Format      | Link                                                   |
+| -------------------------------- | ---------------- | ------------------------ | ----------- | ------------------------------------------------------ |
+| WikiDisputes                     | 96,320           | Forum                    | Original    | [Link](https://aclanthology.org/2021.eacl-main.173/)   |
+| WikiTactics                      | 3,850            | Forum                    | Original    | [Link](https://arxiv.org/abs/2212.08353)               |
+| WikiConv                         | 17,806,373       | Forum                    | Original    | [Link](https://aclanthology.org/D18-1305/)             |
+| Conversations Gone Awry / CMV II | 40,607           | Forum                    | Original    | [Link](https://arxiv.org/abs/1909.01362)               |
+| CeRI data                        | 3,700            | Forum                    | Original    | [Link](https://dl.acm.org/doi/10.1145/2307729.2307757) |
+| User Moderation (UMOD)           | 2,000            | Forum                    | Original    | [Link](https://aclanthology.org/2024.eacl-long.60/)    |
+| Virtual Moderation Dataset (VMD) | 3,563            | Forum                    | Original    | [Link](https://arxiv.org/abs/2503.16505)               |
+| Intelligence Squared 2 (IQ2)     | 34,245           | Debate       | Transcribed | [Link](https://aclanthology.org/N16-1017/)             |
+| Why How Who (WHoW)               | 25,542           | Radio / TV               | Transcribed | [Link](https://aclanthology.org/2025.naacl-long.105/)  |
+| Fora                             | 39,438           | Deliberation | Transcribed | [Link](https://aclanthology.org/2024.acl-long.754/)    |
 
 
 A list of bibliographical references for each of the respective papers can be found in the [refs.bib](refs.bib) file.
