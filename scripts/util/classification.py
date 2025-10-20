@@ -18,8 +18,8 @@ SEED = 42
 
 class DiscussionDataset(torch.utils.data.Dataset):
     """
-    A dataset class that dynamically creates sequences of a target comment and N
-    previous comments as context. Each comment is wrapped in XML-style tags:
+    A dataset class that dynamically creates sequences of a target comment and
+    N previous comments as context. Each comment is wrapped in XML-style tags:
     <CTX> for context, <USR> for username, and <TGT> for target.
 
     Each individual comment (context or target) is truncated by character count
@@ -31,7 +31,7 @@ class DiscussionDataset(torch.utils.data.Dataset):
         target_df: pd.DataFrame,
         full_df: pd.DataFrame,
         tokenizer,
-        max_length_chars: int, # max length of each comment before truncation
+        max_length_chars: int,  # max length of each comment before truncation
         label_column: str,
         max_context_turns=4,
     ):
@@ -76,11 +76,19 @@ class DiscussionDataset(torch.utils.data.Dataset):
         ):
             char_len = self._heuristic_char_length(idx)
             self._lengths.append(char_len)
+        
+        print("DEBUG: Checking a few samples:")
+        for i in range(5):
+            ex = self[i]
+            print(f"\n--- Sample {i} ---")
+            print(ex["text"])
+            print(f"Label: {ex['label']}\n")
 
     def _truncate_text(self, text: str) -> str:
         """
         Truncate a comment by character count to fit within `max_length_chars`.
-        Tags are added outside the truncation, so this applies to the raw text only.
+        Tags are added outside the truncation, so this applies to the raw text
+        only.
         """
         if len(text) <= self.max_length_chars:
             return text
@@ -122,7 +130,10 @@ class DiscussionDataset(torch.utils.data.Dataset):
 
         # Truncate target text
         truncated_target_text = self._truncate_text(target_row["text"])
-        target = f"<TGT><USR>{target_row['user']}</USR>{truncated_target_text}</TGT>"
+        target = (
+            f"<TGT><USR>{target_row['user']}</USR>"
+            f"{truncated_target_text}</TGT>"
+        )
 
         # Collect context comments (most recent first, then reversed)
         context = []
@@ -265,7 +276,7 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
     def __iter__(self):
         # -- bucketed indices, then shuffle buckets --
         batches = [
-            self.sorted_indices[i : i + self.batch_size]
+            self.sorted_indices[i: i + self.batch_size]
             for i in range(0, len(self.sorted_indices), self.batch_size)
         ]
         if self.drop_last and len(batches[-1]) < self.batch_size:
