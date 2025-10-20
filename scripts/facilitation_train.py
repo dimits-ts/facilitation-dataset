@@ -174,37 +174,26 @@ def res_df_from_logits_and_labels(
     df_eval["logit"] = logits
     df_eval["pred"] = (df_eval["logit"] >= 0.5).astype(int)
 
-    # compute per-dataset
+    # compute per-dataset statistics
     rows = []
     for name, group in df_eval.groupby("dataset"):
+        precision, recall, f1, support = (
+            sklearn.metrics.precision_recall_support(
+                group[label_column],
+                group["pred"],
+                average="binary",
+            )
+        )
+
         rows.append(
             {
                 "dataset": name,
-                "loss": sklearn.metrics.log_loss(
-                    group[label_column], group["logit"]
-                ),
-                "accuracy": sklearn.metrics.accuracy_score(
-                    group[label_column], group["pred"]
-                ),
-                "f1": sklearn.metrics.f1_score(
-                    group[label_column], group["pred"]
-                ),
+                "precision": precision,
+                "recall": recall,
+                "f1": f1,
+                "support": support,
             }
         )
-
-    # compute global stats
-    rows.append(
-        {
-            "dataset": "all",
-            "loss": sklearn.metrics.log_loss(labels, logits),
-            "accuracy": sklearn.metrics.accuracy_score(
-                labels, (logits >= 0.5).astype(int)
-            ),
-            "f1": sklearn.metrics.f1_score(
-                labels, (logits >= 0.5).astype(int)
-            ),
-        }
-    )
 
     return pd.DataFrame(rows).set_index("dataset")
 
@@ -224,7 +213,7 @@ def _collect_logits_and_labels(model, dataset, tokenizer):
 
     all_logits, all_labels = [], []
     with torch.no_grad():
-        for batch in tqdm(dataloader, desc="Test set"):
+        for batch in tqdm(dataloader, desc="Testing"):
             labels = batch["labels"].squeeze(-1).cpu()
             inputs = {
                 k: v.to(model.device)
@@ -313,7 +302,7 @@ def main(args) -> None:
     )
 
     print("\n=== Results ===")
-    
+
     res_df = res_df_from_logits_and_labels(
         test_df=test_df,
         logits=logits,
