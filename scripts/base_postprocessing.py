@@ -7,7 +7,6 @@ import util.preprocessing
 
 INPUT_DIR = Path("../datasets")
 OUTPUT_PATH = Path("../pefk.csv")
-MAX_LENGTH_WORDS = 500
 
 
 def get_unified_dataset(input_dir: Path) -> pd.DataFrame:
@@ -78,19 +77,6 @@ def discard_empty_comments(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def discard_long_comments(
-    df: pd.DataFrame, max_length_words: int
-) -> pd.DataFrame:
-    print(f"Removing extremely long comments (>{max_length_words} words)...")
-    initial_size = len(df)
-    df = df[
-        df.text.progress_apply(lambda x: x.split()).apply(len)
-        <= max_length_words
-    ]
-    print(f"Removed {initial_size - len(df)} long comments.")
-    return df
-
-
 def discard_nan_comments(df: pd.DataFrame) -> pd.DataFrame:
     print("Removing NaN comments...")
     initial_size = len(df)
@@ -124,14 +110,17 @@ def main():
             duplicate_dataset="wikiconv",
         )
 
-    df = discard_long_comments(df, max_length_words=MAX_LENGTH_WORDS)
     df = discard_empty_comments(df)
     df = discard_nan_comments(df)
     df = discard_one_man_convs(df)
-    df["should_intervene"] = df.groupby("conv_id")["is_moderator"].shift(-1)  # Shift one row *up* within each conversation
-    print(f"Post-processing complete. Exporting dataset to {OUTPUT_PATH}...")
+    # Shift one row *up* within each conversation
+    df["should_intervene"] = df.groupby("conv_id")["is_moderator"].shift(-1)
+    print(
+        "Post-processing complete. "
+        f"Exporting dataset to {OUTPUT_PATH.resolve()}..."
+    )
     df.to_csv(OUTPUT_PATH, index=False)
-    print(f"Dataset exported as {OUTPUT_PATH}")
+    print(f"Dataset exported as {OUTPUT_PATH.resolve()}")
 
 
 if __name__ == "__main__":

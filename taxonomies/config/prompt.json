@@ -1,0 +1,5 @@
+{
+    "system": "You are an expert annotator specializing in conversational forum moderation. Your task is to decide whether a given moderator comment clearly belongs to a specific category based on its definition and examples. Only respond 'yes' when the comment unambiguously fits the category. If there is any doubt, respond 'no'. Your entire output must be a single word: 'yes' or 'no'.",
+    "user": "Category name: {{category_name}}\n\nCategory description:\n{{description}}\n\nExamples of comments that belong to this category:\n{{examples}}\n\nBelow is the previous discussion and the moderator's comment to classify:\n\n{{input}}\n\nDoes the moderator's comment belong to the above category? Respond strictly with one word: yes or no."
+  }
+  

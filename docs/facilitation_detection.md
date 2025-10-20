@@ -2,13 +2,15 @@
 
 We use a [ModernBERT](https://arxiv.org/abs/2412.13663) model to estimate facilitative comments in the "Wikiconv", "Wikidisputes" and "Conversations Gone Awry" datasets, by using the labels provided by the rest of the datasets. The classifier is trained by the rest of the *non-synthetic* datasets.
 
-The comments are given to the model in XML format. We use the tags \<CTX\> for preceding comments (context), \<USR\> tags to denote the usernames who posted each comment, and \<TRT\> for the actual (target) comments to be classified. We use a maximum of 4 comments for each training sample, although this number is reduced should it not fit to the model's context window of 8192 tokens. We do not truncate the input. These tokens are not added to the tokenizer as special tokens, to keep implementation simple.
+The comments are given to the model in XML format. We use the tags \<CTX\> for preceding comments (context) and \<TRT\> for the actual (target) comments to be classified. These tokens are not added to the tokenizer as special tokens, to keep implementation simple.
+
+We use a maximum of 2 comments for each training sample, and each of these comments is truncated to 5000 characters (tags remain no matter what). We do not use information about users, since most usernames are hashed during dataset preprocessing.
 
 Example:
 ```
-<CRT> <USR> username1 </USR> hello! <\CRT>
-<CRT> <USR> username2 </USR> shut up no one loves you <\CRT>
-<TRT> <USR> mod </USR> not cool man <\TRT>
+<CTX> hello! <\CTX>
+<CTX> shut up no one loves you <\CTX>
+<TRT> not cool man <\TRT>
 ```
 
 ### Results (test set)
@@ -65,6 +67,11 @@ Inference code: [scripts/model_inference.py](scripts/model_inference.py). Note t
 
 ### Parameters
 
-We use the default pre-trained version of the ModernBERT model, with its weights frozen and a binary classification head. We use the default optimizer with Hugging Face Trainer's default parameters, but modify the BCE loss function to have a positive weight equal to the ratio of positive labels. We also use bucketing (creating batches with examples that have similar sizes) to increase efficiency.
+We use the default pre-trained version of the ModernBERT-large model, with its weights frozen and a binary classification head. We use the default optimizer with Hugging Face Trainer's default parameters, but modify the BCE loss function to have a positive weight equal to the ratio of positive labels. We also use bucketing (creating batches with examples that have similar sizes) to increase efficiency.
 
 During training, we use a batch size of 32, max sequence length of 8192, and pin all seeds to the number 42. We ran the models on 120 epochs with Early Stopping, with warmup of 12000 steps, delta=10e-5 and a patience of 5, with evaluation every 4000 steps. We select the best model according to the evaluation loss.
+
+
+### Notes
+
+In an earlier version of our experiments, we had accidentally considered argumentative tactics as facilitation in the WIkitactics dataset. When correcting this mistake, we noted a very large improvement in f1 scores (>0.1), meaning that the tactics we selected had much more in common with faciltiative comments from other datasets.

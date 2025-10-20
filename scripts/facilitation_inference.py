@@ -25,7 +25,8 @@ import util.io
 
 BATCH_SIZE = 3
 MAX_LENGTH = 8192
-CTX_LENGTH_COMMENTS = 4
+MAX_LENGTH_CHARS = 5000
+CTX_LENGTH_COMMENTS = 2
 
 
 def sort_dataset_by_tokenized_sequence_length(dataset):
@@ -43,7 +44,7 @@ def _build_dataloader(dataset, tokenizer) -> torch.utils.data.DataLoader:
         return tokenizer(
             texts,
             padding="longest",
-            truncation=True,
+            truncation=False,
             max_length=MAX_LENGTH,
             return_tensors="pt",
         )
@@ -104,7 +105,7 @@ def infer_and_append(
         offset = 0
         for batch in tqdm(dataloader, desc="Running inference", leave=False):
             probs = _infer(model, device, batch)
-            df_batch = dataset.df.iloc[offset:offset + len(probs)].copy()
+            df_batch = dataset.df.iloc[offset: offset + len(probs)].copy()
             df_batch[output_column_name] = probs
             df_batch = df_batch.loc[:, ["message_id", output_column_name]]
             write_queue.put(df_batch)
@@ -126,7 +127,15 @@ def main(args: argparse.Namespace) -> None:
     output_column_name = args.output_column_name
 
     # model ────────────────────────────────────────────────────────────────
-    model, tokenizer = load_trained_model_tokenizer(model_dir)
+    tokenizer = transformers.AutoTokenizer.from_pretrained(
+        model_dir / "best_model"
+    )
+    model = transformers.AutoModelForSequenceClassification.from_pretrained(
+        model_dir / "best_model",
+        reference_compile=False,
+        attn_implementation="eager",
+    ).to("cuda")
+    model.eval()
 
     # load & clean ─────────────────────────────────────────────────────────
     df = util.io.progress_load_csv(src_path)
@@ -139,9 +148,10 @@ def main(args: argparse.Namespace) -> None:
 
     print("Creating dataset...")
     dataset = util.classification.DiscussionDataset(
-        df,
-        tokenizer,
-        MAX_LENGTH,
+        full_df=df,
+        target_df=df,
+        tokenizer=tokenizer,
+        max_length_chars=MAX_LENGTH_CHARS,
         label_column="dummy_col",
         max_context_turns=CTX_LENGTH_COMMENTS,
     )

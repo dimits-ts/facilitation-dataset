@@ -7,6 +7,14 @@ import util.preprocessing
 
 INPUT_DIR = Path("../downloads/whow/data")
 OUTPUT_PATH = Path("../datasets/whow.csv")
+DIALOGUE_ACTS = [
+    "probing",
+    "confronting",
+    "instruction",
+    "interpretation",
+    "supplement",
+    "utility",
+]
 
 
 def import_df(input_dir: Path) -> pd.DataFrame:
@@ -34,15 +42,60 @@ def merge_back_to_back_comments(df: pd.DataFrame) -> pd.DataFrame:
             "speaker": "first",
             "role": "first",
             "text": " ".join,
+            "dialogue act": ",".join,
+        }
+    )
+    merged = merged.rename(
+        columns={
+            "dialogue act": "dialogue_act",
         }
     )
 
     return merged
 
 
+def expand_dialogue_acts(df: pd.DataFrame) -> pd.DataFrame:
+    # for each row where is_moderator is True
+    # for each value in the dialogue_act string
+    # select unique values
+    # match each value (which is an index on the DIALOGUE_PATH array)
+    # then create columns for each of the values and set it to 1 where
+    #  the index is present
+
+    # Ensure dialogue_act is a string and handle missing values
+    df.dialogue_act = df.dialogue_act.fillna("").astype(str)
+
+    # Initialize new columns for all dialogue acts with False
+    for act in DIALOGUE_ACTS:
+        df[act] = False
+
+    # Only expand for moderator rows
+    moderator_rows = df["is_moderator"]
+
+    # Go through each row and set True where the dialogue act index appears
+    for idx, row in df.loc[moderator_rows].iterrows():
+        acts_str = row["dialogue_act"]
+        if acts_str.strip() == "":
+            continue
+
+        # Split by comma, strip spaces, and filter out empties
+        act_indices = [
+            a.strip() for a in acts_str.split(",") if a.strip().isdigit()
+        ]
+
+        # Set the corresponding columns to True if index exists
+        for a in act_indices:
+            act_idx = int(a)
+            if 0 <= act_idx < len(DIALOGUE_ACTS):
+                df.at[idx, DIALOGUE_ACTS[act_idx]] = True
+
+    return df
+
+
 def main():
     df = import_df(INPUT_DIR)
     df = df.astype(str)
+
     df = merge_back_to_back_comments(df)
 
     df["is_moderator"] = df.role == "mod"
@@ -63,9 +116,13 @@ def main():
         order_col="speaker_turn",
     )
 
-    df["dataset"] = "whow"
-    df["notes"] = None
+    df = expand_dialogue_acts(df)
+    df["notes"] = util.preprocessing.notes_from_columns(
+        df,
+        DIALOGUE_ACTS,
+    )
 
+    df["dataset"] = "whow"
     df["escalated"] = False
     df["escalation_supported"] = False
 

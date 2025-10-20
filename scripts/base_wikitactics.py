@@ -19,17 +19,6 @@ def is_moderator(
         "Suggesting a compromise",
         "Contextualisation",
     ]
-    MODERATION_REBUTTAL = [
-        "DH6: Refutation of opponent's argument (with evidence or reasoning)",
-        "DH5: Counterargument with new evidence / reasoning",
-        "DH7: Refuting the central point",
-    ]
-
-    # Check if any label in rebuttal_labels is in MODERATION_REBUTTAL
-    if rebuttal_labels is not None and any(
-        label in MODERATION_REBUTTAL for label in rebuttal_labels
-    ):
-        return True
 
     # Check if any label in coordination_labels is in MODERATION_COORDINATION
     if coordination_labels is not None and any(
