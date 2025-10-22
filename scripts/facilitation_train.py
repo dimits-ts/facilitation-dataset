@@ -312,7 +312,7 @@ def main(args) -> None:
     )
     print(res_df)
     res_path = logs_dir / "res_dataset.csv"
-    res_df.to_csv(res_path, index=False)
+    res_df.to_csv(res_path)
     print(f"Results per dataset saved to {res_path}.")
 
     # run pr curves on validation set since their results are used
@@ -335,7 +335,7 @@ def main(args) -> None:
     )
     print(pr_df)
     pr_path = logs_dir / "pr_curves.csv"
-    pr_df.to_csv(pr_path, index=False)
+    pr_df.to_csv(pr_path)
     print(f"PR curves saved to {pr_path}.")
 
 

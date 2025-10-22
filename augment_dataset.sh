@@ -4,7 +4,7 @@ touch $LOG_FILE
 
 echo "Training moderation detection model..."
 python scripts/facilitation_train.py \
-    --output_dir=checkpoints/mod \
+    --output_dir=checkpoints/mod/all \
     --logs_dir=logs/mod/all \
     --dataset_path=pefk.csv \
     --datasets=ceri,fora,wikitactics,whow,umod,iq2 | tee "$LOG_FILE"
