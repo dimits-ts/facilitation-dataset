@@ -1,4 +1,4 @@
-# Facilitative detection
+# Facilitator detection
 
 We use a [ModernBERT](https://arxiv.org/abs/2412.13663) model to estimate facilitative comments in the "Wikiconv", "Wikidisputes" and "Conversations Gone Awry" datasets, by using the labels provided by the rest of the datasets. The classifier is trained by the rest of the *non-synthetic* datasets.
 
@@ -13,6 +13,27 @@ Example:
 <TRT> not cool man <\TRT>
 ```
 
+## Facilitator comments vs facilitative comments
+
+The detection between comments made by a facilitator vs. the comments that are facilitative in nature may sound trivial or academic in practice. However, this couldn't be further from the truth. 
+
+Consider the following example:
+
+```
+<CTX> Maybe we should start by collecting examples of unclear moderation cases before suggesting new rules.<\CTX>
+<TRT> Yeah, OK <\TRT>
+```
+
+And contrast it with the following:
+```
+<CTX> I think we should ban users who repeatedly downvote others without reason<\CTX>
+<TRT> Yeah, OK <\TRT>
+```
+The first target comment is obviously facilitative, and the second is not, even though the utterances are the same. However, both could have been reasonably be made *by the same person*, perhaps even in the same discussion. If that person is a facililator, both comments will be considered "facilitator comments", even though their contents may not actually be facilitative. 
+
+With the exception of UMOD, all datasets describing facilitation in PEFK only consider whether the speaker is a facilitator. This may be a useful heuristic (and indeed, the only heuristic in the absense of large scale annotation in the style of UMOD), but it inherently introduces a lot of noise on whether a comment actually facilitates discussion. The latter is left to future work. 
+
+We note that in the case of formal moderation/facilitation datasets, specially trained moderators will most frequently intervene in a facilitative way, meaning that the study of facilitator comments remains useful.
 
 ## Reconciling different domains
 
