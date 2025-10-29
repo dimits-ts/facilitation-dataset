@@ -14,16 +14,15 @@ import util.preprocessing
 import util.io
 
 
-EVAL_STEPS = 1000
-EPOCHS = 1500
-MAX_LENGTH = 4096
+EPOCHS = 100
+MAX_CHAR_LENGTH = 2000
 BATCH_SIZE = 32
-EARLY_STOP_WARMUP = 0
+EARLY_STOP_WARMUP = 2
 EARLY_STOP_THRESHOLD = 0.0001
-EARLY_STOP_PATIENCE = 20
+EARLY_STOP_PATIENCE = 6
 FINETUNE_ONLY_HEAD = True
 MODEL = "answerdotai/ModernBERT-large"
-CTX_LENGTH_COMMENTS = 3
+CTX_LENGTH_COMMENTS = 2
 
 
 def train_model(
@@ -65,13 +64,10 @@ def train_model(
         per_device_train_batch_size=BATCH_SIZE,
         per_device_eval_batch_size=BATCH_SIZE,
         num_train_epochs=EPOCHS,
-        eval_strategy="steps",
-        eval_steps=EVAL_STEPS,
-        save_strategy="steps",
-        save_steps=EVAL_STEPS,
-        logging_strategy="steps",
+        eval_strategy="epoch",
+        save_strategy="epoch",
+        logging_strategy="epoch",
         logging_dir=logs_dir,
-        logging_steps=EVAL_STEPS,
         load_best_model_at_end=True,
         metric_for_best_model="eval_loss",
         greater_is_better=False,
@@ -279,8 +275,6 @@ def collate_fn(tokenizer, batch: list[dict[str, str | list]], num_labels: int):
     enc = tokenizer(
         texts,
         padding="longest",
-        truncation=False,
-        max_length=MAX_LENGTH,
         return_tensors="pt",
     )
     enc["labels"] = labels
@@ -358,7 +352,7 @@ def make_dataset(target_df, full_df, tokenizer, label_names):
         target_df=target_df,
         full_df=full_df,  # full dataset for context
         tokenizer=tokenizer,
-        max_length=MAX_LENGTH,
+        max_length_chars=MAX_CHAR_LENGTH,
         label_column=label_names,
         max_context_turns=CTX_LENGTH_COMMENTS,
     )
@@ -385,6 +379,10 @@ def main(args):
 
     print("Taxonomy distribution:")
     print((target_df[get_label_columns(target_df)] != 0).sum())
+
+    label_cols = get_label_columns(target_df)
+    multi_label_rows = (target_df[label_cols].sum(axis=1) > 1).sum()
+    print(f"Number of rows with multiple labels: {multi_label_rows}")
 
     # ================ Training ================
     if not args.only_test:
