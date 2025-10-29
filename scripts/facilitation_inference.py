@@ -2,6 +2,10 @@
 """
 Infer moderator probabilities and append **full dataframe batches** to disk.
 
+The script runs the largest batches first, to check for VRAM OOM scenarios.
+This means that the ETA approximation is widely overestimated for the first 
+few hours.
+
 After each mini-batch the script
     1. computes fresh probabilities,
     2. inserts them into the corresponding slice of the in-memory DataFrame,
@@ -23,9 +27,8 @@ from tqdm.auto import tqdm
 import util.classification
 import util.io
 
-BATCH_SIZE = 3
-MAX_LENGTH = 8192
-MAX_LENGTH_CHARS = 5000
+BATCH_SIZE = 8
+MAX_LENGTH_CHARS = 2000
 CTX_LENGTH_COMMENTS = 2
 
 
@@ -39,13 +42,16 @@ def sort_dataset_by_tokenized_sequence_length(dataset):
 
 
 def _build_dataloader(dataset, tokenizer) -> torch.utils.data.DataLoader:
+    """
+    Builds a memory-efficient DataLoader that tokenizes lazily
+    but minimizes GPU idle time via multi-worker prefetching.
+    """
     def collate_fn(batch_items: list[dict]):
         texts = [item["text"] for item in batch_items]
         return tokenizer(
             texts,
             padding="longest",
             truncation=False,
-            max_length=MAX_LENGTH,
             return_tensors="pt",
         )
 
@@ -54,8 +60,10 @@ def _build_dataloader(dataset, tokenizer) -> torch.utils.data.DataLoader:
         batch_size=BATCH_SIZE,
         shuffle=False,
         collate_fn=collate_fn,
-        num_workers=1,
-        pin_memory=torch.cuda.is_available(),
+        num_workers=4,          # >= 4 for good CPU/GPU overlap
+        pin_memory=True,        # speed up host→device transfer
+        prefetch_factor=2,      # let workers prepare next batches
+        persistent_workers=True  # keep workers alive between epochs
     )
 
 
@@ -125,6 +133,7 @@ def main(args: argparse.Namespace) -> None:
     dst_path = Path(args.destination_dataset_path)
     dst_path.parent.mkdir(parents=True, exist_ok=True)
     output_column_name = args.output_column_name
+    dataset_ls = args.datasets.split(",")
 
     # model ────────────────────────────────────────────────────────────────
     tokenizer = transformers.AutoTokenizer.from_pretrained(
@@ -140,7 +149,7 @@ def main(args: argparse.Namespace) -> None:
     # load & clean ─────────────────────────────────────────────────────────
     df = util.io.progress_load_csv(src_path)
     df["dummy_col"] = 0
-    df = util.classification.preprocess_dataset(df)
+    df = util.classification.preprocess_dataset(df, dataset_ls)
 
     if df.empty:
         print("No rows match filters - nothing to do.")
@@ -175,6 +184,12 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Infer facilitative comment probabilities and stream the "
         "full dataframe batches to disk."
+    )
+    parser.add_argument(
+        "--datasets",
+        type=str,
+        help="Comma-separated list of datasets",
+        required=True,
     )
     parser.add_argument(
         "--model_dir",
