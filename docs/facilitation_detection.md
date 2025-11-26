@@ -10,7 +10,7 @@ Example:
 ```
 <CTX> hello! <\CTX>
 <CTX> shut up no one loves you <\CTX>
-<TRT> not cool man <\TRT>
+<TGT> not cool man <\TGT>
 ```
 
 ## Facilitator comments vs facilitative comments
