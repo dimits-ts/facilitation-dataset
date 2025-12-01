@@ -45,6 +45,7 @@ conda activate pefk-dataset
 bash create_base_dataset.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 fora
 # uncomment to include ``Inferred'' data (see Table below)
 # bash add_facilitation.sh 
+# bash add_quality_dims.sh
 
 # uncomment to add taxonomy information to the dataset
 # bash add_taxonomies.sh 
