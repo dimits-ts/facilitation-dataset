@@ -1,5 +1,5 @@
 #!/bin/bash
-DOWNLOAD_DIR="../downloads/iq2"
+DOWNLOAD_DIR="../../downloads/iq2"
 MASTER_ZIP_PATH="$DOWNLOAD_DIR/iq2.zip"
 URL="https://tisjune.github.io/datasets/iq2_data_release.zip"
 

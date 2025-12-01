@@ -5,8 +5,8 @@ from tqdm.auto import tqdm
 import util.preprocessing
 
 
-INPUT_DIR = Path("../datasets")
-OUTPUT_PATH = Path("../pefk.csv")
+INPUT_DIR = Path("../../datasets")
+OUTPUT_PATH = Path("../../pefk.csv")
 
 
 def get_unified_dataset(input_dir: Path) -> pd.DataFrame:

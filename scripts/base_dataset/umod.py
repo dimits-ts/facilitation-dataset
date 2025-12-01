@@ -6,8 +6,8 @@ import numpy as np
 import util.preprocessing
 
 
-INPUT_PATH = Path("../downloads/umod/umod.csv")
-OUTPUT_PATH = Path("../datasets/umod.csv")
+INPUT_PATH = Path("../../downloads/umod/umod.csv")
+OUTPUT_PATH = Path("../../datasets/umod.csv")
 
 
 def combine_comments(df):

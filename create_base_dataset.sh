@@ -2,7 +2,7 @@ mkdir -p "logs"
 LOG_FILE="logs/pefk.log"
 touch $LOG_FILE
 
-cd scripts
+cd scripts/base_dataset
 mkdir -p "../datasets"
 mkdir -p "../downloads"
 
@@ -26,8 +26,10 @@ python base_postprocessing.py
 echo  "Finished dataset construction."
 python base_dataset_analysis.py --dataset_path="pefk.csv" --graph_dir=graphs
 
+cd ..
+cd ..
 # clean-up to release disk space_
 echo "Cleaning up downloads directory..."
-rm -r "../downloads"
+rm -r "downloads"
 echo "Cleaning up intermediate datasets..."
-rm -r "../datasets"
+rm -r "datasets"

@@ -6,8 +6,8 @@ import pandas as pd
 import util.preprocessing
 
 
-INPUT_PATH = Path("../downloads/fora/corpus_resources/data.csv")
-OUTPUT_PATH = Path("../datasets/fora.csv")
+INPUT_PATH = Path("../../downloads/fora/corpus_resources/data.csv")
+OUTPUT_PATH = Path("../../datasets/fora.csv")
 
 
 def main():

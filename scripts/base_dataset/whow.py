@@ -5,8 +5,8 @@ import pandas as pd
 import util.preprocessing
 
 
-INPUT_DIR = Path("../downloads/whow/data")
-OUTPUT_PATH = Path("../datasets/whow.csv")
+INPUT_DIR = Path("../../downloads/whow/data")
+OUTPUT_PATH = Path("../../datasets/whow.csv")
 DIALOGUE_ACTS = [
     "probing",
     "confronting",

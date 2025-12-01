@@ -5,8 +5,8 @@ import pandas as pd
 import util.preprocessing
 
 
-INPUT_PATH = Path("../downloads/vmd/data/datasets/dataset.csv")
-OUTPUT_PATH = Path("../datasets/vmd.csv")
+INPUT_PATH = Path("../../downloads/vmd/data/datasets/dataset.csv")
+OUTPUT_PATH = Path("../../datasets/vmd.csv")
 
 
 def get_toxicity(annotation_str: str) -> float:

@@ -1,7 +1,7 @@
 #!/bin/bash
 
-INPUT_FILE="../downloads_external/fora.zip"
-OUTPUT_DIR="../downloads/fora"
+INPUT_FILE="../../downloads_external/fora.zip"
+OUTPUT_DIR="../../downloads/fora"
 
 if [ ! -f $INPUT_FILE ]; then
     echo "The Fora corpus does not seem to be available locally at $(readlink -f "$INPUT_FILE")"

@@ -1,5 +1,5 @@
 #!/bin/bash
-DOWNLOAD_DIR="../downloads/wikidisputes"
+DOWNLOAD_DIR="../../downloads/wikidisputes"
 DOWNLOAD_PATH="$DOWNLOAD_DIR/wikidisputes.tar.gz"
 URL="https://github.com/christinedekock11/wikidisputes/raw/refs/heads/main/data.tar.gz"
 
