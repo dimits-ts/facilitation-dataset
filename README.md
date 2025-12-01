@@ -36,15 +36,15 @@ We provide a conda environment with all dependencies in [`environment.yml`](envi
 
 ```bash
 git clone https://github.com/dimits-ts/facilitation-dataset.git
-
 cd facilitation-dataset
+
 conda env create -f environment.yml
 conda activate pefk-dataset
 
 # data only contained inside the datasets
 bash create_base_dataset.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 fora
 # uncomment to include ``Inferred'' data (see Table below)
-# augment_dataset.sh 
+# bash add_facilitation.sh 
 
 # uncomment to add taxonomy information to the dataset
 # bash add_taxonomies.sh 
