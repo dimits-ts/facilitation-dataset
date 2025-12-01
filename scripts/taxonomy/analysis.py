@@ -7,8 +7,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import sklearn.metrics
 
-import util.io
-import util.preprocessing
+from ..util import io
+from ..util import preprocessing
 
 
 MAX_LABEL_LENGTH_CHARS = 10
@@ -34,7 +34,7 @@ def _simplify_label(label: str) -> str:
 def calculate_llm_performance(
     pefk_df: pd.DataFrame, llm_df: pd.DataFrame, graphs_dir: Path
 ) -> None:
-    fora_df = util.preprocessing.get_human_df(pefk_df, "fora")
+    fora_df = preprocessing.get_human_df(pefk_df, "fora")
     fora_df = fora_df.drop(
         columns=["fora.Personal story", "fora.Personal experience"]
     )
@@ -58,9 +58,9 @@ def calculate_llm_performance(
         labels=results["labels"],
         taxonomy_name="Fora",
     )
-    util.io.save_plot(graphs_dir / "human_llm_cf_matrix_fora.png")
+    io.save_plot(graphs_dir / "human_llm_cf_matrix_fora.png")
 
-    whow_df = util.preprocessing.get_human_df(
+    whow_df = preprocessing.get_human_df(
         pefk_df[pefk_df.is_moderator == 1], "whow"
     )
     whow_mapping = {
@@ -86,7 +86,7 @@ def calculate_llm_performance(
         labels=results["labels"],
         taxonomy_name="WHoW",
     )
-    util.io.save_plot(graphs_dir / "human_llm_cf_matrix_whow.png")
+    io.save_plot(graphs_dir / "human_llm_cf_matrix_whow.png")
 
 
 def plot_classifier_results(df: pd.DataFrame, graphs_dir: Path) -> None:
@@ -119,7 +119,7 @@ def plot_classifier_results(df: pd.DataFrame, graphs_dir: Path) -> None:
     plt.ylabel("Tactic", fontsize=12)
     plt.tight_layout()
 
-    util.io.save_plot(graphs_dir / "taxonomy_cls_res.png")
+    io.save_plot(graphs_dir / "taxonomy_cls_res.png")
 
 
 def get_llm_annotations(label_dir: Path):
@@ -279,7 +279,7 @@ def main(args):
         raise OSError(f"{label_dir} is not a directory.") from None
 
     print("Running human -> LLM evaluation...")
-    pefk_df = util.io.progress_load_csv(dataset_path)
+    pefk_df = io.progress_load_csv(dataset_path)
     llm_df = get_llm_annotations(label_dir)
     calculate_llm_performance(pefk_df, llm_df, graphs_dir)
 

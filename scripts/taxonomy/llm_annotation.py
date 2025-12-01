@@ -13,8 +13,8 @@ import numpy as np
 import coloredlogs
 from tqdm.auto import tqdm
 
-import util.io
-import util.classification
+from ..util import io
+from ..util import classification
 
 
 MODEL_NAME = "unsloth/Llama-3.3-70B-Instruct-bnb-4bit"
@@ -422,9 +422,9 @@ def main(args):
     logs_dir = Path(args.logs_dir)
 
     setup_logging(logs_dir=logs_dir)
-    util.classification.set_seed(42)
+    classification.set_seed(42)
 
-    full_corpus = util.io.progress_load_csv(args.dataset_file)
+    full_corpus = io.progress_load_csv(args.dataset_file)
     full_corpus.text = full_corpus.text.astype(str)
     full_corpus.dataset = full_corpus.dataset.replace(
         {
@@ -440,7 +440,7 @@ def main(args):
         + str(full_corpus.dataset.value_counts())
     )
 
-    mod_corpus = util.classification.get_implied_actual_mod_df(
+    mod_corpus = classification.get_implied_actual_mod_df(
         full_corpus,
         mod_threshold=args.mod_probability_thres,
         mod_probability_file=Path(args.mod_probability_file),

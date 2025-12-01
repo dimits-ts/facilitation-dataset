@@ -9,9 +9,9 @@ import transformers
 import sklearn.metrics
 from tqdm.auto import tqdm
 
-import util.classification
-import util.preprocessing
-import util.io
+from ..util import io
+from ..util import classification
+from ..util import preprocessing
 
 
 EPOCHS = 100
@@ -74,14 +74,14 @@ def train_model(
         report_to="tensorboard",
     )
 
-    early_stopping = util.classification.EarlyStoppingWithWarmupStepsCallback(
+    early_stopping = classification.EarlyStoppingWithWarmupStepsCallback(
         warmup_steps=EARLY_STOP_WARMUP,
         patience=EARLY_STOP_PATIENCE,
         metric_name="eval_loss",
         greater_is_better=False,
     )
 
-    trainer = util.classification.BucketedTrainer(
+    trainer = classification.BucketedTrainer(
         bucket_batch_size=BATCH_SIZE,
         model=model,
         pos_weight=pos_weight,  # <-- tensor per label
@@ -295,7 +295,7 @@ def train_pipeline(
     label_names = get_label_columns(target_df)
     print("Target label names: ", label_names)
 
-    train_df, val_df, _ = util.classification.train_validate_test_split(
+    train_df, val_df, _ = classification.train_validate_test_split(
         target_df,
         train_percent=0.7,
         validate_percent=0.2,
@@ -326,7 +326,7 @@ def evaluation_pipeline(
     output_csv_path: Path,
 ):
     label_names = get_label_columns(target_df)
-    _, _, test_df = util.classification.train_validate_test_split(
+    _, _, test_df = classification.train_validate_test_split(
         target_df,
         train_percent=0.7,
         validate_percent=0.2,
@@ -348,7 +348,7 @@ def evaluation_pipeline(
 
 
 def make_dataset(target_df, full_df, tokenizer, label_names):
-    return util.classification.DiscussionDataset(
+    return classification.DiscussionDataset(
         target_df=target_df,
         full_df=full_df,  # full dataset for context
         tokenizer=tokenizer,
@@ -364,13 +364,13 @@ def main(args):
     logs_dir = Path(args.logs_dir)
 
     tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
-    util.classification.set_seed(util.classification.SEED)
+    classification.set_seed(classification.SEED)
 
     # ================ Dataset preprocessing ================
-    df = util.io.progress_load_csv(dataset_path)
-    df = util.classification.preprocess_dataset(df)
+    df = io.progress_load_csv(dataset_path)
+    df = classification.preprocess_dataset(df)
     mod_df = df[df.is_moderator == 1]
-    target_df = util.preprocessing.get_human_df(mod_df, args.sub_dataset_name)
+    target_df = preprocessing.get_human_df(mod_df, args.sub_dataset_name)
     print(
         f"Selected {len(target_df)} mod comments for training "
         f"out of {len(df[df.dataset == args.sub_dataset_name])} "

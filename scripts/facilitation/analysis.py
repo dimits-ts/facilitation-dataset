@@ -9,8 +9,8 @@ import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
 
-import util.io
-import util.classification
+from ..util import io
+from ..util import classification
 
 
 NUM_SAMPLES_SHAP = 500
@@ -43,7 +43,7 @@ def _get_classification_texts(
 ) -> list[str]:
     tokenizer = transformers.AutoTokenizer.from_pretrained(model_dir)
     # Build dataset and take a sample (too many samples make SHAP very slow)
-    ds = util.classification.DiscussionDataset(
+    ds = classification.DiscussionDataset(
         target_df=test_df,
         full_df=full_df,
         tokenizer=tokenizer,
@@ -72,7 +72,7 @@ def augmented_moderation_plot(
     mod_probability_file = Path(mod_probability_file)
     mod_threshold = 0.6
 
-    mod_prob_df = util.io.progress_load_csv(mod_probability_file)
+    mod_prob_df = io.progress_load_csv(mod_probability_file)
     high_conf_ids = set(
         mod_prob_df.loc[
             mod_prob_df.mod_probabilities.astype(float) >= mod_threshold,
@@ -148,7 +148,7 @@ def augmented_moderation_plot(
     plt.legend(handles, new_labels, title="")
     plt.tight_layout()
 
-    util.io.save_plot(graph_dir / "augmented_analysis_moderation_perc.png")
+    io.save_plot(graph_dir / "augmented_analysis_moderation_perc.png")
     plt.close()
 
 
@@ -195,7 +195,7 @@ def explain_model_global(
     shap.plots.bar(plot_data, show=False, max_display=20)
     plt.title("Token importance for facilitation detection")
     plt.tight_layout()
-    util.io.save_plot(graph_dir / "shap_global_bar_plot.png")
+    io.save_plot(graph_dir / "shap_global_bar_plot.png")
     plt.close()
 
 
@@ -205,8 +205,8 @@ def explain_model_local(explainer, text: str, graph_dir: Path): ...
 def main(args):
     model_dir = Path(args.model_dir)
     graph_dir = Path(args.graph_dir)
-    util.classification.set_seed(util.classification.SEED)
-    df = util.io.progress_load_csv(Path(args.dataset_path))
+    classification.set_seed(classification.SEED)
+    df = io.progress_load_csv(Path(args.dataset_path))
 
     """augmented_moderation_plot(
         df,
@@ -219,8 +219,8 @@ def main(args):
         "Running explanation algorithms on model for "
         f"N={NUM_SAMPLES_SHAP} test-set comments..."
     )
-    classification_df = util.classification.preprocess_dataset(df)
-    _, _, test_df = util.classification.train_validate_test_split(
+    classification_df = classification.preprocess_dataset(df)
+    _, _, test_df = classification.train_validate_test_split(
         classification_df,
         straglobal_tify_col="is_moderator",  # or "should_intervene"
         train_percent=0.7,

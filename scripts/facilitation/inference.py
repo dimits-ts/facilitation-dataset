@@ -3,7 +3,7 @@
 Infer moderator probabilities and append **full dataframe batches** to disk.
 
 The script runs the largest batches first, to check for VRAM OOM scenarios.
-This means that the ETA approximation is widely overestimated for the first 
+This means that the ETA approximation is widely overestimated for the first
 few hours.
 
 After each mini-batch the script
@@ -24,8 +24,8 @@ import torch
 import transformers
 from tqdm.auto import tqdm
 
-import util.classification
-import util.io
+from ..util import io
+from ..util import classification
 
 BATCH_SIZE = 8
 MAX_LENGTH_CHARS = 2000
@@ -46,6 +46,7 @@ def _build_dataloader(dataset, tokenizer) -> torch.utils.data.DataLoader:
     Builds a memory-efficient DataLoader that tokenizes lazily
     but minimizes GPU idle time via multi-worker prefetching.
     """
+
     def collate_fn(batch_items: list[dict]):
         texts = [item["text"] for item in batch_items]
         return tokenizer(
@@ -60,10 +61,10 @@ def _build_dataloader(dataset, tokenizer) -> torch.utils.data.DataLoader:
         batch_size=BATCH_SIZE,
         shuffle=False,
         collate_fn=collate_fn,
-        num_workers=4,          # >= 4 for good CPU/GPU overlap
-        pin_memory=True,        # speed up host→device transfer
-        prefetch_factor=2,      # let workers prepare next batches
-        persistent_workers=True  # keep workers alive between epochs
+        num_workers=4,  # >= 4 for good CPU/GPU overlap
+        pin_memory=True,  # speed up host→device transfer
+        prefetch_factor=2,  # let workers prepare next batches
+        persistent_workers=True,  # keep workers alive between epochs
     )
 
 
@@ -103,7 +104,7 @@ def infer_and_append(
 
     write_queue = queue.Queue(maxsize=8)
     writer_thread = threading.Thread(
-        target=util.io.writer_thread_func,
+        target=io.writer_thread_func,
         args=(write_queue, destination_dataset_path),
         daemon=True,
     )
@@ -113,7 +114,7 @@ def infer_and_append(
         offset = 0
         for batch in tqdm(dataloader, desc="Running inference", leave=False):
             probs = _infer(model, device, batch)
-            df_batch = dataset.df.iloc[offset: offset + len(probs)].copy()
+            df_batch = dataset.df.iloc[offset:offset + len(probs)].copy()
             df_batch[output_column_name] = probs
             df_batch = df_batch.loc[:, ["message_id", output_column_name]]
             write_queue.put(df_batch)
@@ -147,16 +148,16 @@ def main(args: argparse.Namespace) -> None:
     model.eval()
 
     # load & clean ─────────────────────────────────────────────────────────
-    df = util.io.progress_load_csv(src_path)
+    df = io.progress_load_csv(src_path)
     df["dummy_col"] = 0
-    df = util.classification.preprocess_dataset(df, dataset_ls)
+    df = classification.preprocess_dataset(df, dataset_ls)
 
     if df.empty:
         print("No rows match filters - nothing to do.")
         return
 
     print("Creating dataset...")
-    dataset = util.classification.DiscussionDataset(
+    dataset = classification.DiscussionDataset(
         full_df=df,
         target_df=df,
         tokenizer=tokenizer,

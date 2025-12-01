@@ -5,8 +5,8 @@ import torch
 from tqdm.auto import tqdm
 import transformers
 
-import util.classification
-import util.io
+from ..util import io
+from ..util import classification
 
 MAX_LENGTH = 8192  # same as training
 MODEL = "answerdotai/ModernBERT-base"  # same as training
@@ -50,9 +50,9 @@ def run_inference(
     label_names = [f.stem for f in labels_dir.glob("*.csv")]
 
     # ── Load dataset ─────────────────────────────────────────
-    df = util.io.progress_load_csv(dataset_path)
-    df = util.classification.preprocess_dataset(df)
-    mod_df = util.classification.get_implied_actual_mod_df(
+    df = io.progress_load_csv(dataset_path)
+    df = classification.preprocess_dataset(df)
+    mod_df = classification.get_implied_actual_mod_df(
         full_corpus=df,
         mod_threshold=mod_probability_thres,
         mod_probability_file=mod_probability_path,
@@ -70,7 +70,7 @@ def run_inference(
 
     # ── Prepare DiscussionDataset ───────────────────────────
     print("Creating dataset...")
-    dataset = util.classification.DiscussionDataset(
+    dataset = classification.DiscussionDataset(
         target_df=mod_df,
         full_df=df,  # full dataset needed for context
         tokenizer=tokenizer,

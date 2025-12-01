@@ -2,8 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-import util.preprocessing
-
+from ..util import preprocessing
 
 INPUT_PATH = Path("../../downloads/vmd/data/datasets/dataset.csv")
 OUTPUT_PATH = Path("../../datasets/vmd.csv")
@@ -46,14 +45,14 @@ def main():
     df = df.reset_index()
 
     df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
-    df["reply_to"] = util.preprocessing.assign_reply_to(
+    df["reply_to"] = preprocessing.assign_reply_to(
         df,
         conv_id_col="conv_id",
         message_id_col="message_id",
         order_col="speaker_turn",
     )
 
-    df["notes"] = util.preprocessing.notes_from_columns(
+    df["notes"] = preprocessing.notes_from_columns(
         df, ["model", "toxicity", "arg_qual"]
     )
     df["dataset"] = "vmd"
@@ -64,7 +63,7 @@ def main():
     df["moderation_supported"] = True
 
     df = df.rename(columns={"message": "text"})
-    df = util.preprocessing.std_format_df(df)
+    df = preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

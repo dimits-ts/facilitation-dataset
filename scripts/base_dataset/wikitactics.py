@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-import util.preprocessing
+from ..util import preprocessing
 
 
 INPUT_PATH = Path("../../downloads/wikitactics/wikitactics.json")
@@ -52,7 +52,7 @@ def main():
         f"{row.get('speaker_turn')}",
         axis=1,
     )
-    df["reply_to"] = util.preprocessing.assign_reply_to(
+    df["reply_to"] = preprocessing.assign_reply_to(
         df,
         conv_id_col="conv_id",
         message_id_col="message_id",
@@ -63,7 +63,7 @@ def main():
     df["escalated"] = df["escalation_label"]
     df["escalation_supported"] = True
     df = df.rename(columns={"username": "user"})
-    df = util.preprocessing.std_format_df(df)
+    df = preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

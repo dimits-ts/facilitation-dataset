@@ -5,7 +5,7 @@ import seaborn as sns
 import pandas as pd
 import matplotlib.pyplot as plt
 
-import util.io
+from ..util import io
 
 
 def convert_bytes(num):
@@ -41,7 +41,7 @@ def comments_per_discussion_plot(df: pd.DataFrame, graph_dir: Path) -> None:
     plt.ylabel("Number of Discussions")
     plt.tight_layout()
 
-    util.io.save_plot(graph_dir / "analysis_comments_per_discussion.png")
+    io.save_plot(graph_dir / "analysis_comments_per_discussion.png")
 
 
 def moderation_plot(df: pd.DataFrame, graph_dir: Path) -> float:
@@ -69,7 +69,7 @@ def moderation_plot(df: pd.DataFrame, graph_dir: Path) -> float:
     plt.xticks(rotation=45)
     plt.tight_layout()
 
-    util.io.save_plot(graph_dir / "analysis_moderation_perc.png")
+    io.save_plot(graph_dir / "analysis_moderation_perc.png")
 
 
 def main(args):
@@ -77,7 +77,7 @@ def main(args):
     graph_dir = Path(args.graph_dir)
 
     print("Loading dataset to extract statistics...")
-    df = util.io.progress_load_csv(csv_path)
+    df = io.progress_load_csv(csv_path)
 
     print("*" * 25)
     print("Comments per discussion:")

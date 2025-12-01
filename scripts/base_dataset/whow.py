@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-import util.preprocessing
+from ..util import preprocessing
 
 
 INPUT_DIR = Path("../../downloads/whow/data")
@@ -101,7 +101,7 @@ def main():
     df["is_moderator"] = df.role == "mod"
     df["moderation_supported"] = True
 
-    df["user"] = df.speaker.apply(util.preprocessing.hash_to_md5)
+    df["user"] = df.speaker.apply(preprocessing.hash_to_md5)
 
     df["speaker_turn"] = df.groupby("conv_id").cumcount() + 1
     df["message_id"] = df.apply(
@@ -109,7 +109,7 @@ def main():
         axis=1,
     )
     df = df.sort_values(by="message_id")
-    df["reply_to"] = util.preprocessing.assign_reply_to(
+    df["reply_to"] = preprocessing.assign_reply_to(
         df,
         conv_id_col="conv_id",
         message_id_col="message_id",
@@ -117,7 +117,7 @@ def main():
     )
 
     df = expand_dialogue_acts(df)
-    df["notes"] = util.preprocessing.notes_from_columns(
+    df["notes"] = preprocessing.notes_from_columns(
         df,
         DIALOGUE_ACTS,
     )
@@ -126,7 +126,7 @@ def main():
     df["escalated"] = False
     df["escalation_supported"] = False
 
-    df = util.preprocessing.std_format_df(df)
+    df = preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

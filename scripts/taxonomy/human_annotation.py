@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pandas as pd
 
-import util.io
-import util.classification
+from ..util import io
+from ..util import classification
 
 
 SEED = 42
@@ -19,7 +19,7 @@ def get_comments_with_context(
     target_df = target_df.copy()
     full_df = full_df.copy()
     # Create a DiscussionDataset (your class handles context building)
-    dataset = util.classification.DiscussionDataset(
+    dataset = classification.DiscussionDataset(
         target_df=target_df,
         full_df=full_df,
         tokenizer=None,  # unused
@@ -75,7 +75,7 @@ def make_human_readable(original: str) -> str:
 
 
 def main(pefk_path: Path, output_dir: Path):
-    df = util.io.progress_load_csv(pefk_path)
+    df = io.progress_load_csv(pefk_path)
     df.text = df.text.astype(str)
     df.dataset = df.dataset.replace(
         {

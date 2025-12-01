@@ -4,7 +4,7 @@ import json
 
 import pandas as pd
 
-import util.preprocessing
+from ..util import preprocessing
 
 
 INPUT_DIR = Path("../../downloads/wikidisputes/data")
@@ -60,13 +60,13 @@ def main():
             "conversation.id": "message_id",
         }
     )
-    df["notes"] = util.preprocessing.notes_from_columns(
+    df["notes"] = preprocessing.notes_from_columns(
         df,
         ["toxicity", "severe_toxicity"],
     )
     # df.escalated already in dataframe
     df["escalation_supported"] = True
-    df = util.preprocessing.std_format_df(df)
+    df = preprocessing.std_format_df(df)
 
     df.to_csv(OUTPUT_PATH, index=False)
 

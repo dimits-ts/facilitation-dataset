@@ -3,7 +3,7 @@ import re
 
 import pandas as pd
 
-import util.preprocessing
+from ..util import preprocessing
 
 INPUT_PATH = Path("../../downloads/ceri/ceri.xlsx")
 OUTPUT_PATH = Path("../../datasets/ceri.csv")
@@ -41,7 +41,7 @@ def process_sheet(df: pd.DataFrame, sheet_index: int) -> pd.DataFrame:
     else:
         conv_source = df["SUBTOPIC"].astype(str)
 
-    df["conv_id"] = conv_source.apply(util.preprocessing.hash_to_md5)
+    df["conv_id"] = conv_source.apply(preprocessing.hash_to_md5)
     df["dataset"] = "ceri"
     df["notes"] = None
     df["escalated"] = False
@@ -56,7 +56,7 @@ def process_sheet(df: pd.DataFrame, sheet_index: int) -> pd.DataFrame:
         },
         axis=1,
     )
-    return util.preprocessing.std_format_df(df)
+    return preprocessing.std_format_df(df)
 
 
 def main():

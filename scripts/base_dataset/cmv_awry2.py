@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pandas as pd
 
-import util.preprocessing
+from ..util import preprocessing
 
 
 INPUT_PATH = Path(
@@ -42,7 +42,7 @@ def main():
     df["is_moderator"] = False
     df["moderation_supported"] = False
 
-    df = util.preprocessing.std_format_df(df)
+    df = preprocessing.std_format_df(df)
 
     df.to_csv(OUTPUT_PATH, index=False)
 

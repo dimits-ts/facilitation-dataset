@@ -3,7 +3,7 @@ import json
 
 import pandas as pd
 
-import util.preprocessing
+from ..util import preprocessing
 
 
 INPUT_PATH = Path("../../downloads/iq2/iq2_data_release.json")
@@ -42,7 +42,7 @@ def main():
     df["escalated"] = False
     df["escalation_supported"] = False
     
-    df["reply_to"] = util.preprocessing.assign_reply_to(
+    df["reply_to"] = preprocessing.assign_reply_to(
         df,
         conv_id_col="conv_id",
         message_id_col="message_id",
@@ -55,7 +55,7 @@ def main():
             "speaker": "user",
         }
     )
-    df = util.preprocessing.std_format_df(df)
+    df = preprocessing.std_format_df(df)
     df.to_csv(OUTPUT_PATH, index=False)
 
 

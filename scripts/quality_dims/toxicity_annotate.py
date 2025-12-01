@@ -10,7 +10,7 @@ import pandas as pd
 import requests
 from tqdm.auto import tqdm
 
-import util.io
+from ..util import io
 
 
 DELAY_SECS = 1.1
@@ -28,7 +28,7 @@ def get_perspective_scores(
 
     write_q = queue.Queue()
     writer_thread = threading.Thread(
-        target=util.io.writer_thread_func, args=(write_q, out_path)
+        target=io.writer_thread_func, args=(write_q, out_path)
     )
     writer_thread.start()
 
@@ -158,7 +158,7 @@ def main(args):
         print(f"Perspective API key file not found: {args.api_key_file}")
         return
 
-    df = util.io.progress_load_csv(args.input_csv)
+    df = io.progress_load_csv(args.input_csv)
     # exclude datasets that were already annotated with the perspective API
     perspective_df = df.loc[~df.dataset.isin(["wikidisputes", "wikiconv"])]
 

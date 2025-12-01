@@ -8,8 +8,8 @@ import transformers
 import sklearn.metrics
 from tqdm.auto import tqdm
 
-import util.classification
-import util.io
+from ..util import io
+from ..util import classification
 
 
 EPOCHS = 80
@@ -61,21 +61,21 @@ def train_model(
         logging_dir=logs_dir,
     )
 
-    early_stopping = util.classification.EarlyStoppingWithWarmupStepsCallback(
+    early_stopping = classification.EarlyStoppingWithWarmupStepsCallback(
         warmup_steps=EARLY_STOP_WARMUP,
         patience=EARLY_STOP_PATIENCE,
         metric_name="eval_loss",
         greater_is_better=False,
     )
 
-    trainer = util.classification.BucketedTrainer(
+    trainer = classification.BucketedTrainer(
         bucket_batch_size=BATCH_SIZE,
         pos_weight=pos_weight,
         model=model,
         args=training_args,
         train_dataset=train_dat,
         eval_dataset=val_dat,
-        compute_metrics=util.classification.compute_metrics,
+        compute_metrics=classification.compute_metrics,
         callbacks=[early_stopping],
         data_collator=collate,
     )
@@ -108,7 +108,7 @@ def test_model(
     )
 
     # Full test dataset (single pass)
-    full_ds = util.classification.DiscussionDataset(
+    full_ds = classification.DiscussionDataset(
         full_df=full_df.reset_index(drop=True),
         target_df=test_df.reset_index(drop=True),
         tokenizer=tokenizer,
@@ -233,17 +233,17 @@ def main(args) -> None:
     target_label = args.target_label
 
     print("Selected datasets: ", dataset_ls)
-    util.classification.set_seed(util.classification.SEED)
+    classification.set_seed(classification.SEED)
 
-    df = util.io.progress_load_csv(dataset_path)
-    df = util.classification.preprocess_dataset(df, dataset_ls)
+    df = io.progress_load_csv(dataset_path)
+    df = classification.preprocess_dataset(df, dataset_ls)
     # remove comment if should_intervene is the target
     # (only case where NaNs should exist)
     df = df.dropna(subset=target_label)
 
     pos_weight = (df[target_label] == 0).sum() / (df[target_label] == 1).sum()
 
-    train_df, val_df, test_df = util.classification.train_validate_test_split(
+    train_df, val_df, test_df = classification.train_validate_test_split(
         df,
         stratify_col=target_label,
         train_percent=0.8,
@@ -251,7 +251,7 @@ def main(args) -> None:
     )
     tokenizer = transformers.AutoTokenizer.from_pretrained(MODEL)
 
-    train_dataset = util.classification.DiscussionDataset(
+    train_dataset = classification.DiscussionDataset(
         full_df=df,
         target_df=train_df,
         tokenizer=tokenizer,
@@ -259,7 +259,7 @@ def main(args) -> None:
         label_column=target_label,
         max_context_turns=CTX_LENGTH_COMMENTS,
     )
-    val_dataset = util.classification.DiscussionDataset(
+    val_dataset = classification.DiscussionDataset(
         full_df=df,
         target_df=val_df,
         tokenizer=tokenizer,
