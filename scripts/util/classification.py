@@ -11,7 +11,6 @@ import sklearn.metrics
 import transformers
 from tqdm.auto import tqdm
 
-import util.io
 
 SEED = 42
 
@@ -264,7 +263,7 @@ class SmartBucketBatchSampler(torch.utils.data.Sampler[list[int]]):
     def __iter__(self):
         # -- bucketed indices, then shuffle buckets --
         batches = [
-            self.sorted_indices[i: i + self.batch_size]
+            self.sorted_indices[i:i + self.batch_size]
             for i in range(0, len(self.sorted_indices), self.batch_size)
         ]
         if self.drop_last and len(batches[-1]) < self.batch_size:

@@ -9,8 +9,8 @@ from ..util import classification
 
 
 SEED = 42
-TOTAL_SAMPLES = 3000
-NUM_ANNOTATOR_GROUPS = 3
+TOTAL_SAMPLES = 2000
+NUM_DECOYS = 50
 
 
 def get_comments_with_context(
@@ -84,7 +84,7 @@ def main(pefk_path: Path, output_dir: Path):
             "wikidisputes": "wikipedia",
         }
     )
-    target_df = df[(df.text.str.len() >= 50) & (df.text.str.len() <= 1500)]
+    target_df = df.loc[(df.text.str.len() >= 50) & (df.text.str.len() <= 1500)]
     target_df.text = get_comments_with_context(
         full_df=df, target_df=target_df, context_len=2
     )
@@ -93,9 +93,7 @@ def main(pefk_path: Path, output_dir: Path):
 
     # Prepare a dictionary of per-dataset shuffled DataFrames
     shuffled = {
-        dataset: target_df[target_df.dataset == dataset]
-        .sample(frac=1, random_state=SEED)
-        .reset_index(drop=True)
+        dataset: target_df[target_df.dataset == dataset].reset_index(drop=True)
         for dataset in target_df.dataset.unique()
     }
 
@@ -110,6 +108,15 @@ def main(pefk_path: Path, output_dir: Path):
     output_df = output_df.loc[:, ["message_id", "text"]]
     output_df.text = output_df.text.apply(make_human_readable)
     output_df = output_df.rename(columns={"message_id": "id"})
+
+    # add consistency rows
+    dup = output_df.sample(n=NUM_DECOYS, replace=False, random_state=SEED)
+    output_df = pd.concat([output_df, dup], ignore_index=True)
+
+    # shuffle final dataframe
+    output_df = output_df.sample(frac=1, random_state=SEED).reset_index(
+        drop=True
+    )
 
     output_path = output_dir / "human_annotation.csv"
     output_df.to_csv(output_path, index=False)
