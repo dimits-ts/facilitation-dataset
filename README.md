@@ -2,7 +2,7 @@
 
 The "Prosocial and Effective Facilitation in Konversations" (PEFK) dataset is an aggregation and standardization of important facilitation datasets presented in Social Science literature. It includes numerous metrics and taxonomy labels from Machine Learning, Deep Learning and LLM classifiers.
 
-The dataset will be provided as a single file upon the completion of the project. The current version can be constructed by executing a shell script (see `Usage` Section). It is released under a CC-BY-SA License, and the code producing it uses the MIT software license.
+The dataset will be provided as a single file upon the completion of the project. The current version can be constructed by executing a shell script (see `Usage` Section). It is released under a CC-BY-SA License, and the code producing it uses the GPLv3 software license.
 
 **This repository is currently under development. We plan on adding more datasets and quantitative discussion quality metrics in the near future.**
 
@@ -41,14 +41,13 @@ cd facilitation-dataset
 conda env create -f environment.yml
 conda activate pefk-dataset
 
-# data only contained inside the datasets
 bash create_base_dataset.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq2 fora
 ```
 
 ## Important Notes
 
 - The *Fora* dataset is NOT publicly available. Under an agreement with the MIT CCC we do not include this dataset by default in this repository, although the code to process it is present. 
-    - If you have access to *Fora*, place the provided `.zip` file in the `project_root/downloads_external` directory.
+    - If you have access to *Fora*, place the provided `.zip` file in the `<project_root>/downloads_external` directory.
     - You may request access to Fora following the researchers' [provided instructions](https://github.com/schropes/fora-corpus/blob/main/README.md)
 
 - The WikiConv dataset is **extremely** large and may take multiple hours to download and process, depending on your hardware.
