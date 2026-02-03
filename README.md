@@ -1,6 +1,6 @@
 # The PEFK dataset
 
-The"Prosocial and Effective Facilitation in Konversations" (PEFK) dataset is an aggregation and standardization of important facilitation datasets presented in Social Science literature. It includes numerous metrics and taxonomy labels from Machine Learning, Deep Learning and LLM classifiers.
+The "Prosocial and Effective Facilitation in Konversations" (PEFK) dataset is an aggregation and standardization of important facilitation datasets presented in Social Science literature. It includes numerous metrics and taxonomy labels from Machine Learning, Deep Learning and LLM classifiers.
 
 The dataset will be provided as a single file upon the completion of the project. The current version can be constructed by executing a shell script (see `Usage` Section). It is released under a CC-BY-SA License, and the code producing it uses the MIT software license.
 
@@ -84,15 +84,45 @@ bash create_base_dataset.sh wikiconv whow ceri cmv_awry2 umod vmd wikitactics iq
 Inferred columns contain information not obtained by the actual datasets, but by our own analysis.
 
 
-## Documentation
+## Preprocessing 
 
-* [Preprocessing](docs/preprocessing.md)
+### General
+- We exclude comments with no text
+- We exclude discussions with less than two distinct participants
+- We exclude discussions which are common between wikitactics and wikiconv as well as wikidisputes and wikiconv. 
+    - There may be duplicate discussions between wikidisputes and wikitactics, but we allow them since they feature complementary information
 
-* [Detecting facilitative comments](docs/facilitation_detection.md)
+### Wikiconv
+The Wikiconv corpus does not contain information about which user is a moderator/facilitator. Therefore, all comments relating to Wikiconv are tagged as non-moderators
 
-* [Predicting when facilitators intervene](docs/intervention_detection.md)
+- Additionally, we follow the [instructions of the original researchers](https://github.com/conversationai/wikidetox/blob/main/wikiconv/README.md), and select only discussions which have at least two comments by different users
+    - Wikipedia (thankfully) does not track users who log in with only an IP address (in the original dataset, their user_id is always set to 0 and their username is of the form 211.111.111.xxx). We consider each such username to be a separate user.
+    - Due to the size of the dataset, we have to partially load it during preprocessing. Thus, there is a small chance every 100,000 records that a discussion is marked as a false negative and a part of it gets discarded.
+    - We only include English comments in the final dataset. We use a small, efficient library (`py3langid`) for language recognition, due to the large size of Wikiconv. Non-english comments are discarded *before* selecting valid discussions (see point above).
 
-* [Analyzing facilitative taxonomies](docs/taxonomy_annotation.md)
+
+### Wikitactics
+We infer facilitative actions by whether the comment belongs in any of the following categories:
+- Asking questions
+- Coordinating edits
+- Providing clarification
+- Suggesting a compromise
+- Contextualisation
+
+The above tactics are a subset of the Coordinative labels used in the WikiTactics paper. They were selected because they are not used neccesarily on 1-1 discussions; they could reasonably be applied by third-party participants. Contrast them with other Coordinative labels such as "Conceding/recanting" and "I don't know".
+
+### Wikidisputes
+Since only 0.03% of the comments in the dataset are made by moderators, we mark the dataset as not supporting moderation.
+
+
+### UMOD
+Facilitative actions are marked as a gradient from 0 (no facilitation) to 1 (full facilitation). We adopt a threshold of 0.75 to consider an action as facilitative, with more than 50% annotator agreement (measured as entropy in the original dataset).
+
+
+### CMV-AWRY2
+We mark a discussion as escalated when the derailement value (from the official dataset) is in the 60th upper percentile.
+
+We remove deleted ("[deleted]") comments.
 
 
 ## Acknowledgements
