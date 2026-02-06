@@ -37,60 +37,6 @@ def convert_bytes(num):
         num /= 1024.0
 
 
-def comments_per_discussion_plot(df: pd.DataFrame, graph_dir: Path) -> None:
-    disc_sizes = (
-        df.groupby("conv_id").size().reset_index(name="comments_per_disc")
-    )
-
-    # Cap at 40 because there is a tail going up to 1200 comments
-    disc_sizes["comments_per_disc"] = disc_sizes["comments_per_disc"].clip(
-        upper=40
-    )
-
-    plt.figure(figsize=(8, 5))
-    sns.histplot(
-        data=disc_sizes,
-        x="comments_per_disc",
-        bins=40,
-        multiple="stack",
-        common_norm=True,
-    )
-    plt.title("Distribution of Comments per Discussion")
-    plt.xlabel("Number of Comments (capped at 40)")
-    plt.ylabel("Number of Discussions")
-    plt.tight_layout()
-
-    io.save_plot(graph_dir / "analysis_comments_per_discussion.png")
-
-
-def moderation_plot(df: pd.DataFrame, graph_dir: Path) -> float:
-    moderator_percent = (
-        df.groupby("dataset")["is_moderator"]
-        .mean()
-        .reset_index(name="moderator_percent")
-    )
-    moderator_percent["moderator_percent"] *= 100
-    order = moderator_percent.sort_values(
-        "moderator_percent", ascending=False
-    )["dataset"].tolist()
-
-    plt.figure(figsize=(8, 5))
-    sns.barplot(
-        data=moderator_percent,
-        x="dataset",
-        y="moderator_percent",
-        color="steelblue",
-        order=order,
-    )
-    plt.title("Percentage of Moderator Comments per Dataset")
-    plt.xlabel("Dataset")
-    plt.ylabel("Percentage (%)")
-    plt.xticks(rotation=45)
-    plt.tight_layout()
-
-    io.save_plot(graph_dir / "analysis_moderation_perc.png")
-
-
 def main(args):
     csv_path = Path(args.dataset_path)
     graph_dir = Path(args.graph_dir)
@@ -122,11 +68,7 @@ def main(args):
 
     print("*" * 25)
     print(f"Dataset total size: {convert_bytes(csv_path.stat().st_size)}")
-
-    comments_per_discussion_plot(df, graph_dir)
-    comments_per_discussion_plot(df, graph_dir)
-    moderation_plot(df, graph_dir=graph_dir)
-
+    
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
