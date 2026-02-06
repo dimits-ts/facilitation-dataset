@@ -25,8 +25,8 @@ import pandas as pd
 from ..util import preprocessing
 
 
-INPUT_PATH = Path("../../downloads/iq2/iq2_data_release.json")
-OUTPUT_PATH = Path("../../datasets/iq2.csv")
+INPUT_PATH = Path("downloads/iq2/iq2_data_release.json")
+OUTPUT_PATH = Path("datasets/iq2.csv")
 
 
 def json_to_df(json_dataset: dict) -> pd.DataFrame:

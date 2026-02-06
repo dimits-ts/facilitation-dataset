@@ -24,11 +24,12 @@ from tqdm.auto import tqdm
 from ..util import preprocessing
 
 
-INPUT_DIR = Path("../../datasets")
-OUTPUT_PATH = Path("../../pefk.csv")
+INPUT_DIR = Path("datasets")
+OUTPUT_PATH = Path("pefk.csv")
 
 
 def get_unified_dataset(input_dir: Path) -> pd.DataFrame:
+    print(input_dir.resolve())
     dfs = []
     for file_path in tqdm(
         list(input_dir.rglob("*.csv")), desc="Combining datasets"

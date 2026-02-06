@@ -24,8 +24,8 @@ import pandas as pd
 
 from ..util import preprocessing
 
-INPUT_PATH = Path("../../downloads/ceri/ceri.xlsx")
-OUTPUT_PATH = Path("../../datasets/ceri.csv")
+INPUT_PATH = Path("downloads/ceri/ceri.xlsx")
+OUTPUT_PATH = Path("datasets/ceri.csv")
 CLEAN_HTML_PATTERN = re.compile("<.*?>")
 
 

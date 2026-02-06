@@ -26,8 +26,8 @@ import pandas as pd
 from ..util import preprocessing
 
 
-INPUT_DIR = Path("../../downloads/wikidisputes/data")
-OUTPUT_PATH = Path("../../datasets/wikidisputes.csv")
+INPUT_DIR = Path("downloads/wikidisputes/data")
+OUTPUT_PATH = Path("datasets/wikidisputes.csv")
 
 
 def read_json(path: Path) -> pd.DataFrame:

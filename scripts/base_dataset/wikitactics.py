@@ -24,8 +24,8 @@ import pandas as pd
 from ..util import preprocessing
 
 
-INPUT_PATH = Path("../../downloads/wikitactics/wikitactics.json")
-OUTPUT_PATH = Path("../../datasets/wikitactics.csv")
+INPUT_PATH = Path("downloads/wikitactics/wikitactics.json")
+OUTPUT_PATH = Path("datasets/wikitactics.csv")
 
 
 def is_moderator(

@@ -13,18 +13,17 @@ datasets=("$@")
 
 for datasetname in "${datasets[@]}"; do
     echo "Downloading ${datasetname}..."
-    bash "base_$datasetname.sh"
+    bash "$datasetname.sh"
     echo "Processing ${datasetname}..."
-    python "base_$datasetname.py"
+    python -m "scripts.base_dataset.${datasetname}"
     echo "Exported $datasetname.csv"
 done
 
 # combine datasets into one_
 echo "Processing final dataset..."
-python base_postprocessing.py
-
+python postprocessing.py
 echo  "Finished dataset construction."
-python base_dataset_analysis.py --dataset_path="pefk.csv" --graph_dir=graphs
+
 
 cd ..
 cd ..

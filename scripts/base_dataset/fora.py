@@ -25,8 +25,8 @@ import pandas as pd
 from ..util import preprocessing
 
 
-INPUT_PATH = Path("../../downloads/fora/corpus_resources/data.csv")
-OUTPUT_PATH = Path("../../datasets/fora.csv")
+INPUT_PATH = Path("downloads/fora/corpus_resources/data.csv")
+OUTPUT_PATH = Path("datasets/fora.csv")
 
 
 def main():

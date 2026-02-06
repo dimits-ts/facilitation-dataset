@@ -24,8 +24,8 @@ import pandas as pd
 from ..util import preprocessing
 
 
-INPUT_DIR = Path("../../downloads/whow/data")
-OUTPUT_PATH = Path("../../datasets/whow.csv")
+INPUT_DIR = Path("downloads/whow/data")
+OUTPUT_PATH = Path("datasets/whow.csv")
 DIALOGUE_ACTS = [
     "probing",
     "confronting",

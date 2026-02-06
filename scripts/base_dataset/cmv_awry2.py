@@ -25,10 +25,10 @@ from ..util import preprocessing
 
 
 INPUT_PATH = Path(
-    "../../downloads/cmv_awry2/conversations-gone-awry-cmv-corpus/"
+    "downloads/cmv_awry2/conversations-gone-awry-cmv-corpus/"
     "utterances.jsonl"
 )
-OUTPUT_PATH = Path("../../datasets/cmv_awry2.csv")
+OUTPUT_PATH = Path("datasets/cmv_awry2.csv")
 PERCENTILE_ESCALATION = 60
 
 

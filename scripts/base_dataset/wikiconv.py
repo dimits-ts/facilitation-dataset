@@ -28,8 +28,8 @@ from ..util import preprocessing
 from ..util import io
 
 
-INPUT_DIR = Path("../../downloads/wikiconv")
-OUTPUT_PATH = Path("../../datasets/wikiconv.csv")
+INPUT_DIR = Path("downloads/wikiconv")
+OUTPUT_PATH = Path("datasets/wikiconv.csv")
 CHUNK_SIZE = 100_000
 
 
