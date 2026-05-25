@@ -2,9 +2,7 @@
 
 The "Prosocial and Effective Facilitation in Konversations" (PEFK) dataset is an aggregation and standardization of important facilitation datasets presented in Social Science literature. It includes numerous metrics and taxonomy labels from Machine Learning, Deep Learning and LLM classifiers.
 
-The dataset will be provided as a single file upon the completion of the project. The current version can be constructed by executing a shell script (see `Usage` Section). It is released under a CC-BY-SA License, and the code producing it uses the GPLv3 software license.
-
-**This repository is currently under development. We plan on adding more datasets and quantitative discussion quality metrics in the near future.**
+The code producing the dataset uses the GPLv3-or-later license. We do not redistribute the dataset itself-rather, we use the endpoints indicated by the authors to download the raw data. Keep in mind that all licenses for each separate dataset still apply. One of the datasets is not provided freely and permission must be granted by the original data controller-see the `Important Notes` section.
 
 
 ## List of datasets used
